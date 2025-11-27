@@ -5,7 +5,8 @@
  * GET /api/auth/etsy/authorize
  * - Generates PKCE values (code_verifier, code_challenge)
  * - Generates state parameter for CSRF protection
- * - Stores code_verifier and state in Edge Config with 10-minute expiry
+ * - Stores code_verifier and state in Edge Config with creation timestamp
+ *   (expiry is checked in the callback handler based on created_at)
  * - Redirects user to Etsy consent page
  */
 
@@ -127,8 +128,11 @@ export async function GET(): Promise<NextResponse> {
       codeChallenge
     );
 
+    // Log with redacted client_id using URLSearchParams for safe parsing
+    const redactedUrl = new URL(authUrl);
+    redactedUrl.searchParams.set('client_id', '***');
     logInfo('Redirecting to Etsy authorization page', { 
-      authUrl: authUrl.replace(/client_id=[^&]+/, 'client_id=***') 
+      authUrl: redactedUrl.toString() 
     });
 
     // Redirect user to Etsy consent page

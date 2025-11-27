@@ -59,8 +59,13 @@ export async function generateCodeChallenge(verifier: string): Promise<string> {
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
 
   // Convert to Base64-URL encoding (RFC 4648 Section 5)
+  // Use a memory-efficient approach to avoid stack overflow with large arrays
   const hashArray = new Uint8Array(hashBuffer);
-  const base64 = btoa(String.fromCharCode(...hashArray));
+  let binary = '';
+  for (let i = 0; i < hashArray.length; i++) {
+    binary += String.fromCharCode(hashArray[i]);
+  }
+  const base64 = btoa(binary);
 
   // Convert Base64 to Base64-URL: replace + with -, / with _, remove =
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
