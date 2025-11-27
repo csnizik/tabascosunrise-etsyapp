@@ -131,7 +131,7 @@ export function buildAuthorizationUrl(
     redirect_uri: config.redirectUri,
     scope: config.scopes,
     client_id: config.clientId,
-    state: state,
+    state,
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
   });

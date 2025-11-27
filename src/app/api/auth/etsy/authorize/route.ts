@@ -18,68 +18,9 @@ import {
   buildAuthorizationUrl,
   type OAuthStateData,
 } from '@/lib/etsy/oauth';
+import { storeOAuthState } from '@/lib/storage/edge-config';
 import { logInfo, logError } from '@/lib/utils/logger';
 import { ConfigError, OAuthError, StorageError, toPublicError } from '@/lib/utils/errors';
-
-/**
- * Edge Config client for storing OAuth state
- * Uses Vercel Edge Config for temporary storage with expiry
- */
-async function storeOAuthState(state: string, data: OAuthStateData): Promise<void> {
-  const edgeConfigId = process.env.EDGE_CONFIG_ID;
-  const edgeConfigToken = process.env.EDGE_CONFIG_TOKEN;
-
-  if (!edgeConfigId || !edgeConfigToken) {
-    throw new StorageError(
-      'Edge Config is not configured. Set EDGE_CONFIG_ID and EDGE_CONFIG_TOKEN environment variables.',
-      'EDGE_CONFIG_NOT_CONFIGURED'
-    );
-  }
-
-  const key = `oauth_state_${state}`;
-
-  try {
-    // Use Vercel Edge Config API to store the state
-    const response = await fetch(
-      `https://api.vercel.com/v1/edge-config/${edgeConfigId}/items`,
-      {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${edgeConfigToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          items: [
-            {
-              operation: 'upsert',
-              key,
-              value: data,
-            },
-          ],
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new StorageError(
-        `Failed to store OAuth state: ${errorText}`,
-        'EDGE_CONFIG_WRITE_ERROR'
-      );
-    }
-
-    logInfo('OAuth state stored in Edge Config', { key });
-  } catch (error) {
-    if (error instanceof StorageError) {
-      throw error;
-    }
-    throw new StorageError(
-      'Failed to store OAuth state in Edge Config',
-      'EDGE_CONFIG_WRITE_ERROR',
-      error instanceof Error ? error : undefined
-    );
-  }
-}
 
 /**
  * GET handler for initiating OAuth flow
