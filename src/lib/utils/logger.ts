@@ -9,11 +9,22 @@ interface LogContext {
 }
 
 /**
+ * Safely serializes context object to JSON string
+ */
+function safeStringify(obj: LogContext): string {
+  try {
+    return JSON.stringify(obj);
+  } catch {
+    return '[Unable to serialize context]';
+  }
+}
+
+/**
  * Formats a log message with timestamp and level
  */
 function formatLogMessage(level: LogLevel, message: string, context?: LogContext): string {
   const timestamp = new Date().toISOString();
-  const contextString = context ? ` ${JSON.stringify(context)}` : '';
+  const contextString = context ? ` ${safeStringify(context)}` : '';
   return `[${timestamp}] [${level}] ${message}${contextString}`;
 }
 
