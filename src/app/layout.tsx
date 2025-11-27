@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-// @ts-expect-error - allow importing global CSS in Next.js app directory without a module declaration
 import "./globals.css";
 
 const geistSans = Geist({
