@@ -9,6 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@vercel/blob": "^2.0.0",
+    "@vercel/edge-config": "^1.4.3",
+    "@vercel/postgres": "^0.10.0",
     "next": "16.0.5",
     "react": "19.2.0",
     "react-dom": "19.2.0"
