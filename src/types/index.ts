@@ -1,68 +1,49 @@
 /**
- * Etsy API type definitions
- * Based on Etsy Open API v3 specification
+ * Shared type definitions for the application
+ * Domain-specific types are located in their respective lib directories:
+ * - Etsy types: @/lib/etsy/types
+ * - Facebook types: @/lib/facebook/types
  */
 
-/** Price structure from Etsy API */
-export interface EtsyPrice {
-  amount: number;
-  divisor: number;
-  currency_code: string;
-}
-
-/** Image data from Etsy API */
-export interface EtsyImage {
-  url_fullxfull: string;
-}
-
-/** Etsy listing data structure */
-export interface EtsyListing {
-  listing_id: number;
-  title: string;
-  description: string;
-  price: EtsyPrice;
-  quantity: number;
-  url: string;
-  images: EtsyImage[];
-  state: 'active' | 'inactive' | 'draft';
-}
-
-/** OAuth token data stored in Edge Config */
-export interface EtsyTokens {
-  access_token: string;
-  refresh_token: string;
-  expires_at: string;
-  user_id: string;
-  shop_id?: string;
-}
-
-/**
- * Facebook Product Catalog type definitions
- * Based on Facebook Commerce Manager CSV specification
- */
-
-/** Facebook product for catalog CSV */
-export interface FacebookProduct {
-  id: string;
-  title: string;
-  description: string;
-  availability: 'in stock' | 'out of stock';
-  condition: 'new' | 'refurbished' | 'used';
-  price: string;
-  link: string;
-  image_link: string;
-  brand: string;
-}
+// Re-export domain-specific types for convenience
+export type { EtsyPrice, EtsyImage, EtsyListing, EtsyTokens } from '@/lib/etsy/types';
+export type { FacebookProduct } from '@/lib/facebook/types';
 
 /**
  * Sync status type definitions
  */
 
+/**
+ * Current status of a sync operation
+ */
 export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
 
+/**
+ * Result of a sync operation
+ * @property status - Current sync status
+ * @property lastSyncTime - ISO 8601 timestamp of last successful sync
+ * @property listingsCount - Number of listings synced
+ * @property error - Error message if status is 'error'
+ */
 export interface SyncResult {
   status: SyncStatus;
   lastSyncTime?: string;
   listingsCount?: number;
   error?: string;
+}
+
+/**
+ * Standard API response wrapper
+ * @template T - Type of the response data
+ * @property success - Whether the request succeeded
+ * @property data - Response payload (only present on success)
+ * @property error - Error details (only present on failure)
+ */
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: {
+    message: string;
+    code?: string;
+  };
 }
