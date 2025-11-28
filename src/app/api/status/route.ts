@@ -15,7 +15,7 @@ import {
   getSyncMetadata,
 } from '@/lib/storage/edge-config';
 import { logInfo, logError } from '@/lib/utils/logger';
-import { StorageError, toPublicError } from '@/lib/utils/errors';
+import { StorageError, toPublicError, isEdgeConfigNotConfigured } from '@/lib/utils/errors';
 
 /**
  * Status response type
@@ -30,20 +30,6 @@ export interface StatusResponse {
     listingsCount: number;
     feedUrl?: string;
   };
-}
-
-/**
- * Check if an error indicates Edge Config is not configured
- * Checks direct code, cause code, and message for configuration errors
- */
-function isEdgeConfigNotConfigured(error: unknown): boolean {
-  return (
-    error instanceof StorageError &&
-    (error.code === 'EDGE_CONFIG_NOT_CONFIGURED' ||
-      (error.cause instanceof StorageError &&
-        error.cause.code === 'EDGE_CONFIG_NOT_CONFIGURED') ||
-      error.message.includes('not configured'))
-  );
 }
 
 /**
