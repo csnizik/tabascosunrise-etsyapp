@@ -148,6 +148,136 @@ export async function getEtsyTokens(): Promise<EtsyTokens | null> {
 }
 
 /**
+ * Buffer time (in milliseconds) before token expiry to trigger refresh
+ * Refreshing 5 minutes early avoids race conditions
+ */
+const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
+
+/**
+ * Check if the stored access token is expired or will expire soon
+ * Checks expiry 5 minutes early to avoid race conditions
+ *
+ * @param tokens - Etsy token data
+ * @returns true if the token is expired or will expire within 5 minutes
+ * @example
+ * const tokens = await getEtsyTokens();
+ * if (tokens && isTokenExpired(tokens)) {
+ *   // Refresh the token
+ * }
+ */
+export function isTokenExpired(tokens: EtsyTokens): boolean {
+  const expiresAt = new Date(tokens.expires_at).getTime();
+  const now = Date.now();
+  return now >= expiresAt - TOKEN_EXPIRY_BUFFER_MS;
+}
+
+/**
+ * Response from Etsy OAuth token refresh endpoint
+ */
+interface EtsyRefreshTokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  refresh_token: string;
+}
+
+/**
+ * Refresh the Etsy access token using the refresh token
+ * Sends a POST request to the Etsy OAuth token endpoint
+ * and updates the stored tokens in Edge Config
+ *
+ * @param currentTokens - Current Etsy tokens including refresh_token
+ * @returns Updated Etsy tokens with new access_token and expires_at
+ * @throws StorageError if refresh fails or tokens cannot be stored
+ * @example
+ * const tokens = await getEtsyTokens();
+ * if (tokens && isTokenExpired(tokens)) {
+ *   const newTokens = await refreshAccessToken(tokens);
+ * }
+ */
+export async function refreshAccessToken(currentTokens: EtsyTokens): Promise<EtsyTokens> {
+  const apiKey = process.env.ETSY_API_KEY;
+
+  if (!apiKey) {
+    throw new StorageError(
+      'ETSY_API_KEY environment variable is not set',
+      'CONFIG_ERROR'
+    );
+  }
+
+  logInfo('Refreshing Etsy access token');
+
+  try {
+    const response = await fetch('https://api.etsy.com/v3/public/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: apiKey,
+        refresh_token: currentTokens.refresh_token,
+      }).toString(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logError('Failed to refresh Etsy access token', {
+        status: response.status,
+        error: errorText,
+      });
+
+      // Check if this is a refresh token expiration (90 days)
+      if (response.status === 400 || response.status === 401) {
+        throw new StorageError(
+          'Refresh token has expired or is invalid. Re-authorization required.',
+          'REFRESH_TOKEN_EXPIRED'
+        );
+      }
+
+      throw new StorageError(
+        `Failed to refresh Etsy access token: ${errorText}`,
+        'TOKEN_REFRESH_ERROR'
+      );
+    }
+
+    const data: EtsyRefreshTokenResponse = await response.json();
+
+    // Calculate new expiration time
+    const expiresAt = new Date(Date.now() + data.expires_in * 1000).toISOString();
+
+    // Create updated tokens object
+    const updatedTokens: EtsyTokens = {
+      ...currentTokens,
+      access_token: data.access_token,
+      refresh_token: data.refresh_token, // Etsy returns same refresh token
+      expires_at: expiresAt,
+    };
+
+    // Store updated tokens in Edge Config
+    await storeEtsyTokens(updatedTokens);
+
+    logInfo('Successfully refreshed Etsy access token', {
+      expires_at: expiresAt,
+    });
+
+    return updatedTokens;
+  } catch (error) {
+    if (error instanceof StorageError) {
+      throw error;
+    }
+    logError('Unexpected error during token refresh', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    throw new StorageError(
+      'Failed to refresh Etsy access token',
+      'TOKEN_REFRESH_ERROR',
+      error instanceof Error ? error : undefined
+    );
+  }
+}
+
+/**
  * Internal helper to write data to Edge Config
  * Uses the Vercel API since the SDK is read-only
  */
