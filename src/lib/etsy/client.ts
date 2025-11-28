@@ -274,6 +274,24 @@ function validateShopId(shopId: string): string {
 }
 
 /**
+ * Validate and sanitize a shop name for use in API endpoints
+ * @param shopName - The shop name to validate
+ * @returns The validated and trimmed shop name
+ * @throws EtsyApiError if the shop name is invalid
+ */
+function validateShopName(shopName: string): string {
+  // Trim whitespace
+  const trimmed = shopName.trim();
+
+  // Check if empty
+  if (!trimmed) {
+    throw new EtsyApiError('Shop name cannot be empty', 'INVALID_SHOP_NAME', 400);
+  }
+
+  return trimmed;
+}
+
+/**
  * Etsy API Client with rate limiting and automatic token refresh
  * Provides methods for fetching shop listings and details
  *

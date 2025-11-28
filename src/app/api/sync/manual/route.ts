@@ -23,6 +23,7 @@ import {
   EtsyApiError,
   StorageError,
   RateLimitError,
+  ConfigError,
   AppError,
   toPublicError,
 } from '@/lib/utils/errors';
@@ -56,10 +57,8 @@ export async function POST(): Promise<NextResponse> {
       const shopName = process.env.ETSY_SHOP_NAME;
       if (!shopName) {
         logError('ETSY_SHOP_NAME environment variable is not set');
-        throw new EtsyApiError(
-          'ETSY_SHOP_NAME environment variable is required when shop_id is not stored',
-          'CONFIG_ERROR',
-          500
+        throw new ConfigError(
+          'ETSY_SHOP_NAME environment variable is required when shop_id is not stored'
         );
       }
       logInfo('No shop_id stored, fetching shop by name', {
@@ -156,6 +155,8 @@ export async function POST(): Promise<NextResponse> {
       statusCode = error.statusCode || 502;
     } else if (error instanceof StorageError) {
       statusCode = 503;
+    } else if (error instanceof ConfigError) {
+      statusCode = 500;
     }
 
     const publicError = toPublicError(error);
