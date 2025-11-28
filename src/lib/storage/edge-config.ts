@@ -11,6 +11,7 @@ import { StorageError } from '@/lib/utils/errors';
 import { logInfo, logError } from '@/lib/utils/logger';
 import type { OAuthStateData } from '@/lib/etsy/oauth';
 import type { EtsyTokens, RateLimitState } from '@/lib/etsy/types';
+import type { SyncMetadata } from '@/types';
 
 /**
  * Get the Edge Config client
@@ -405,16 +406,6 @@ export async function storeRateLimitState(state: RateLimitState): Promise<void> 
       error instanceof Error ? error : undefined
     );
   }
-}
-
-/**
- * Sync metadata structure stored in Edge Config
- */
-interface SyncMetadata {
-  timestamp: string;
-  status: 'success' | 'failure';
-  listingsCount: number;
-  feedUrl?: string;
 }
 
 /**

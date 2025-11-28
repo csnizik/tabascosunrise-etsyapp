@@ -47,22 +47,18 @@ export async function POST(): Promise<NextResponse> {
     logInfo('Step 2: Fetching shop details');
     const client = new EtsyClient();
 
-    // Get shop ID from tokens or use the user ID to fetch it
-    // The user_id from the token can be used to get the shop
-    // We need to get the shop ID first if not stored
-    let shopId = tokens.shop_id;
-
-    if (!shopId) {
-      // If shop_id is not stored, we need to use a different approach
-      // For now, we'll use the user_id as the shop_id
-      // In a real scenario, you might need to fetch the shop by user
-      logInfo('No shop_id stored, using user_id as shop identifier', {
+    // Get shop using stored shop_id or look up by user_id
+    let shop;
+    if (tokens.shop_id) {
+      logInfo('Using stored shop_id', { shopId: tokens.shop_id });
+      shop = await client.getShopDetails(tokens.shop_id);
+    } else {
+      logInfo('No shop_id stored, fetching shop by user_id', {
         userId: tokens.user_id,
       });
-      shopId = tokens.user_id;
+      shop = await client.getShopByUserId(tokens.user_id);
     }
 
-    const shop = await client.getShopDetails(shopId);
     logInfo('Shop details fetched', {
       shopId: shop.shop_id,
       shopName: shop.shop_name,
