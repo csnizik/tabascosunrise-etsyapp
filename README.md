@@ -329,6 +329,7 @@ Go to Vercel Dashboard → Your Project → Settings → Environment Variables a
 | Variable | Value | Notes |
 |----------|-------|-------|
 | `ETSY_API_KEY` | Your API key | From [Etsy Developer Portal](https://www.etsy.com/developers/your-apps) |
+| `ETSY_SHOP_NAME` | TabascoSunrise | Your Etsy shop name (exact match required) |
 | `ETSY_REDIRECT_URI` | `https://your-app.vercel.app/api/auth/etsy/callback` | Update to production URL |
 | `ETSY_SCOPES` | `listings_r shops_r` | Required OAuth scopes |
 | `EDGE_CONFIG_ID` | `ecfg_xxxxx` | From Edge Config settings |
