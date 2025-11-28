@@ -5,6 +5,7 @@
  * GET /api/feed
  * - Returns CSV with Content-Type: text/csv; charset=utf-8
  * - Cache-Control: public, max-age=3600 (1 hour)
+ * - ETag support for conditional requests (304 Not Modified)
  * - CORS headers for Facebook access
  * - Returns 404 if no CSV available
  * - Returns 500 if Blob fetch fails
@@ -13,7 +14,8 @@
  * Facebook will poll this URL periodically to sync the product catalog.
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 import { getCSV } from '@/lib/storage/blob';
 import { logInfo, logError } from '@/lib/utils/logger';
 import { StorageError, toPublicError } from '@/lib/utils/errors';
@@ -49,8 +51,9 @@ export async function OPTIONS(): Promise<Response> {
 /**
  * GET handler for feed endpoint
  * Serves the Facebook catalog CSV from Blob storage
+ * Supports conditional requests via ETag/If-None-Match for efficient caching
  */
-export async function GET(): Promise<Response> {
+export async function GET(request: NextRequest): Promise<Response> {
   logInfo('Feed access requested');
 
   try {
@@ -75,17 +78,36 @@ export async function GET(): Promise<Response> {
       );
     }
 
+    // Generate ETag from content hash for conditional requests
+    const etag = `"${createHash('sha256').update(result.content).digest('hex')}"`;
+
+    // Check If-None-Match header for conditional request
+    const requestEtag = request.headers.get('if-none-match');
+    if (requestEtag === etag) {
+      logInfo('Feed not modified - returning 304', { etag });
+      return new Response(null, {
+        status: 304,
+        headers: {
+          'ETag': etag,
+          'Cache-Control': 'public, max-age=3600',
+          ...corsHeaders,
+        },
+      });
+    }
+
     logInfo('Feed served successfully', {
       size: result.content.length,
       uploadedAt: result.uploadedAt.toISOString(),
+      etag,
     });
 
-    // Return CSV with appropriate headers
+    // Return CSV with appropriate headers including ETag
     return new Response(result.content, {
       status: 200,
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
         'Cache-Control': 'public, max-age=3600',
+        'ETag': etag,
         ...corsHeaders,
       },
     });

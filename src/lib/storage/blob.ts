@@ -154,10 +154,27 @@ export async function getCSV(
     }
 
     // Fetch the actual CSV content from the blob URL
-    const response = await fetch(blob.url);
+    let response: Response;
+    try {
+      response = await fetch(blob.url);
+    } catch (fetchError) {
+      const errorMessage = fetchError instanceof Error ? fetchError.message : 'Unknown network error';
+      logError('Network error fetching blob content', {
+        error: errorMessage,
+        url: blob.url,
+      });
+      throw new StorageError(
+        `Network error fetching blob content: ${errorMessage}`,
+        'BLOB_NETWORK_ERROR',
+        fetchError instanceof Error ? fetchError : undefined
+      );
+    }
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch blob content: ${response.status} ${response.statusText}`);
+      throw new StorageError(
+        `Failed to fetch blob content: ${response.status} ${response.statusText}`,
+        'BLOB_FETCH_ERROR'
+      );
     }
 
     const content = await response.text();
@@ -174,13 +191,19 @@ export async function getCSV(
       uploadedAt: blob.uploadedAt,
     };
   } catch (error) {
+    // Re-throw StorageErrors as-is (already properly formatted)
+    if (error instanceof StorageError) {
+      throw error;
+    }
+
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logError('Failed to fetch CSV from Blob storage', {
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: errorMessage,
       filename,
     });
 
     throw new StorageError(
-      `Failed to fetch CSV from Blob storage: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      `Failed to fetch CSV from Blob storage: ${errorMessage}`,
       'BLOB_FETCH_ERROR',
       error instanceof Error ? error : undefined
     );

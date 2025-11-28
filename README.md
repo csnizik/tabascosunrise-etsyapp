@@ -164,6 +164,7 @@ The Feed Serving Endpoint (`src/app/api/feed/route.ts`) provides a public URL fo
 
 - **Public Access**: No authentication required - Facebook can poll directly
 - **Caching**: 1-hour cache with `Cache-Control: public, max-age=3600`
+- **ETag Support**: Conditional requests with `If-None-Match` return 304 Not Modified when unchanged
 - **CORS Support**: Allows cross-origin access from any domain
 - **Error Handling**: Returns 404 if no CSV available, 500 for storage errors
 
@@ -179,6 +180,7 @@ Returns the Facebook catalog CSV file.
 |--------|-------|
 | Content-Type | `text/csv; charset=utf-8` |
 | Cache-Control | `public, max-age=3600` |
+| ETag | SHA-256 hash of content for conditional requests |
 | Access-Control-Allow-Origin | `*` |
 
 #### Response Codes
@@ -186,6 +188,7 @@ Returns the Facebook catalog CSV file.
 | Code | Description |
 |------|-------------|
 | 200 | Success - returns CSV content |
+| 304 | Not Modified - content unchanged (conditional request) |
 | 404 | No catalog feed available - run a sync first |
 | 500 | Storage error - check Blob configuration |
 
