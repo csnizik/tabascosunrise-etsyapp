@@ -559,7 +559,12 @@ export class EtsyClient {
       );
     }
 
-    // Find exact match (case-insensitive for safety)
+    /**
+     * The Etsy API's /application/shops?shop_name=... endpoint may return multiple shops
+     * with similar names, not just an exact match. To ensure we return the correct shop,
+     * we perform a case-insensitive exact match on shop_name. If no exact match is found,
+     * we throw an error. This avoids returning a shop with a similar but incorrect name.
+     */
     const shop = response.results.find(
       (s) => s.shop_name.toLowerCase() === shopName.toLowerCase()
     );
