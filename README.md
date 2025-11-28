@@ -381,6 +381,7 @@ Go to Vercel Dashboard → Your Project → Settings → Environment Variables a
    - Go to Deployments → Logs
    - Search for "Cron sync completed successfully"
    - Verify no errors appear
+   - If you see "401 Unauthorized", verify `CRON_SECRET` is set correctly and redeploy
 5. The cron job is defined in `vercel.json`
 
 #### Step 8: Complete Workflow Verification
