@@ -150,9 +150,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       code: err instanceof OAuthError ? err.code : undefined,
     });
 
-    // Clean up OAuth state if it exists
+    // Clean up OAuth state if it exists (fire-and-forget to avoid masking original error)
     if (state) {
-      await deleteOAuthState(state);
+      deleteOAuthState(state).catch((cleanupErr) => {
+        logError('Failed to clean up OAuth state during error handling', {
+          error: cleanupErr instanceof Error ? cleanupErr.message : 'Unknown error',
+        });
+      });
     }
 
     // Redirect to dashboard with error message
@@ -250,13 +254,16 @@ async function exchangeCodeForTokens(
  *
  * @param accessToken - The access token from Etsy
  * @returns User ID extracted from the token
+ * @throws OAuthError if token format is unexpected
  */
 function extractUserId(accessToken: string): string {
   const parts = accessToken.split('.');
   if (parts.length < 2) {
     logError('Unexpected access token format', { tokenLength: accessToken.length });
-    // Return empty string if format is unexpected
-    return '';
+    throw new OAuthError(
+      'Invalid access token format received from Etsy',
+      'INVALID_TOKEN_FORMAT'
+    );
   }
   return parts[0];
 }

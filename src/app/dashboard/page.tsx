@@ -125,7 +125,7 @@ async function DashboardContent({ searchParams }: DashboardContentProps) {
             <li>Click &quot;Connect to Etsy&quot; to authorize this app</li>
             <li>Grant permission to read your shop listings</li>
             <li>You&apos;ll be redirected back here after authorization</li>
-            <li>Use &quot;Sync Now&quot; to generate your Facebook catalog</li>
+            <li>Use &quot;Sync Now&quot; to generate your Facebook catalog (coming soon)</li>
           </ol>
         </div>
       </div>
