@@ -3,7 +3,7 @@
  * Handles authentication and provides methods for Etsy API calls
  */
 
-import { TokenError } from '@/lib/utils/errors';
+import { TokenError, StorageError } from '@/lib/utils/errors';
 import { logInfo, logError } from '@/lib/utils/logger';
 import {
   getEtsyTokens,
@@ -54,11 +54,7 @@ export async function getValidToken(): Promise<EtsyTokens> {
     return refreshedTokens;
   } catch (error) {
     // Check if this is a refresh token expiration
-    if (
-      error instanceof Error &&
-      'code' in error &&
-      (error as { code: string }).code === 'REFRESH_TOKEN_EXPIRED'
-    ) {
+    if (error instanceof StorageError && error.code === 'REFRESH_TOKEN_EXPIRED') {
       throw new TokenError(
         'Etsy authorization has expired (refresh token expired). Please re-authorize.',
         'REFRESH_TOKEN_EXPIRED'

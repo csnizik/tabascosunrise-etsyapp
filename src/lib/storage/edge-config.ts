@@ -250,7 +250,7 @@ export async function refreshAccessToken(currentTokens: EtsyTokens): Promise<Ets
     const updatedTokens: EtsyTokens = {
       ...currentTokens,
       access_token: data.access_token,
-      refresh_token: data.refresh_token, // Etsy returns same refresh token
+      refresh_token: data.refresh_token, // Use the refresh token from response
       expires_at: expiresAt,
     };
 
