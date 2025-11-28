@@ -543,8 +543,10 @@ export class EtsyClient {
   async getShopByName(shopName: string): Promise<EtsyShop> {
     logInfo('Fetching shop by name', { shopName });
 
+    // Validate shop name
+    const trimmedShopName = validateShopName(shopName);
     // Encode the shop name for URL safety
-    const encodedShopName = encodeURIComponent(shopName);
+    const encodedShopName = encodeURIComponent(trimmedShopName);
     const endpoint = `/application/shops?shop_name=${encodedShopName}`;
     const response = await this.makeRequest<EtsyShopsResponse>(endpoint);
 
