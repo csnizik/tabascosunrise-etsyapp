@@ -43,11 +43,20 @@ export function formatPrice(price: EtsyPrice): string {
 
 /**
  * Strips HTML tags from a string
+ * Uses iterative replacement to handle nested and malformed tags
  * @param text - Text that may contain HTML tags
  * @returns Text with all HTML tags removed
  */
 export function stripHtml(text: string): string {
-  return text.replace(/<[^>]*>/g, '');
+  let result = text;
+  let previous;
+  // Iteratively strip HTML tags until no more are found
+  // This handles cases like <<script>script> where single pass would leave <script>
+  do {
+    previous = result;
+    result = result.replace(/<[^>]*>/g, '');
+  } while (result !== previous);
+  return result;
 }
 
 /**
