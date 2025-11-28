@@ -5,7 +5,7 @@
  * Handles interactive elements: status fetching, manual sync trigger, and copy functionality
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import type { StatusResponse } from '@/app/api/status/route';
 
@@ -24,6 +24,51 @@ interface DashboardClientProps {
   authStatus?: string;
   errorCode?: string;
   errorMessage?: string;
+}
+
+/**
+ * Get actionable error message based on error type
+ */
+function getActionableError(error: unknown): FeedbackMessage {
+  if (error instanceof Error) {
+    if (error.message.toLowerCase().includes('rate limit')) {
+      return {
+        type: 'error',
+        text: 'Rate limit exceeded. Please wait a few minutes and try again.',
+      };
+    }
+    if (error.message.toLowerCase().includes('token') || error.message.toLowerCase().includes('auth')) {
+      return {
+        type: 'error',
+        text: 'Authentication expired. Please reconnect to Etsy.',
+      };
+    }
+    if (error.message.toLowerCase().includes('network') || error.message.toLowerCase().includes('fetch')) {
+      return {
+        type: 'error',
+        text: 'Network error. Please check your connection and try again.',
+      };
+    }
+    return {
+      type: 'error',
+      text: error.message,
+    };
+  }
+  return {
+    type: 'error',
+    text: 'An unexpected error occurred. Please try again.',
+  };
+}
+
+/**
+ * Format duration in milliseconds to human-readable string
+ */
+function formatDuration(ms: number): string {
+  if (ms < 1000) {
+    return `${ms}ms`;
+  }
+  const seconds = Math.round(ms / 100) / 10;
+  return `${seconds}s`;
 }
 
 /**
@@ -163,36 +208,83 @@ export default function DashboardClient({
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackMessage | null>(null);
+  const [lastSyncDuration, setLastSyncDuration] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const retriesRef = useRef(0);
+  const maxRetries = 3;
 
-  // Fetch status on mount
-  useEffect(() => {
-    async function fetchStatus() {
-      try {
+  // Fetch status with retry logic
+  const fetchStatus = useCallback(async (isRetry = false) => {
+    try {
+      if (!isRetry) {
         setLoading(true);
-        setError(null);
-        const response = await fetch('/api/status');
-        const data = await response.json();
+        retriesRef.current = 0;
+      }
+      setError(null);
+      const response = await fetch('/api/status');
+      const data = await response.json();
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.error?.message || 'Failed to fetch status');
-        }
+      if (!response.ok || !data.success) {
+        throw new Error(data.error?.message || 'Failed to fetch status');
+      }
 
-        setStatus(data.data);
-      } catch (err) {
+      setStatus(data.data);
+      retriesRef.current = 0;
+      return data.data;
+    } catch (err) {
+      if (retriesRef.current < maxRetries) {
+        retriesRef.current++;
+        // Exponential backoff: 1s, 2s, 3s
+        setTimeout(() => fetchStatus(true), 1000 * retriesRef.current);
+      } else {
         setError(err instanceof Error ? err.message : 'An error occurred');
-      } finally {
+      }
+      return null;
+    } finally {
+      if (!isRetry || retriesRef.current >= maxRetries) {
         setLoading(false);
       }
     }
+  }, []);
 
+  // Fetch status on mount
+  useEffect(() => {
     fetchStatus();
+  }, [fetchStatus]);
+
+  // Manual refresh status - reuses fetchStatus logic
+  const handleRefreshStatus = useCallback(async () => {
+    setRefreshing(true);
+    setError(null);
+    retriesRef.current = 0;
+    try {
+      const response = await fetch('/api/status');
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error?.message || 'Failed to fetch status');
+      }
+
+      setStatus(data.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
   // Handle manual sync
   const handleSync = async () => {
+    // Check local state first to avoid unnecessary API call
+    if (syncing) {
+      setFeedback({ type: 'info', text: 'Sync already in progress' });
+      return;
+    }
+
     try {
       setSyncing(true);
       setFeedback(null);
+      setLastSyncDuration(null);
 
       const response = await fetch('/api/sync/manual', {
         method: 'POST',
@@ -203,6 +295,15 @@ export default function DashboardClient({
         throw new Error(data.error?.message || 'Sync failed');
       }
 
+      // Store sync duration from response
+      const duration = data.stats?.duration;
+      if (duration) {
+        setLastSyncDuration(duration);
+      }
+
+      // Wait for Edge Config to update before refreshing status
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Refresh status after successful sync
       const statusResponse = await fetch('/api/status');
       const statusData = await statusResponse.json();
@@ -211,15 +312,13 @@ export default function DashboardClient({
       }
 
       const listingsCount = data.stats?.listingsCount ?? 0;
+      const durationText = duration ? ` in ${formatDuration(duration)}` : '';
       setFeedback({
         type: 'success',
-        text: `Successfully synced ${listingsCount} listings!`,
+        text: `Successfully synced ${listingsCount} listings${durationText}!`,
       });
     } catch (err) {
-      setFeedback({
-        type: 'error',
-        text: err instanceof Error ? err.message : 'Sync failed',
-      });
+      setFeedback(getActionableError(err));
     } finally {
       setSyncing(false);
     }
@@ -237,9 +336,34 @@ export default function DashboardClient({
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black p-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-white mb-8">
-          TabascoSunrise Dashboard
-        </h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold text-zinc-900 dark:text-white">
+            TabascoSunrise Dashboard
+          </h1>
+          {!loading && (
+            <button
+              onClick={handleRefreshStatus}
+              disabled={refreshing}
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-lg transition-colors disabled:opacity-50"
+              title="Refresh status"
+            >
+              <svg
+                className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              {refreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          )}
+        </div>
 
         {/* Auth Status Messages from URL params */}
         {authStatus === 'success' && (
@@ -329,9 +453,18 @@ export default function DashboardClient({
         {/* Error State */}
         {!loading && error && (
           <div className="mb-6 p-4 bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-lg">
-            <p className="text-red-800 dark:text-red-200 font-medium">
-              Error loading status: {error}
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-red-800 dark:text-red-200 font-medium">
+                Error loading status: {error}
+              </p>
+              <button
+                onClick={handleRefreshStatus}
+                disabled={refreshing}
+                className="px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 bg-red-200 dark:bg-red-800 hover:bg-red-300 dark:hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {refreshing ? 'Retrying...' : 'Retry'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -413,6 +546,16 @@ export default function DashboardClient({
                           {status.sync.listingsCount}
                         </span>
                       </div>
+                      {lastSyncDuration && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-zinc-600 dark:text-zinc-400">
+                            Duration
+                          </span>
+                          <span className="text-zinc-500 dark:text-zinc-500 text-sm">
+                            {formatDuration(lastSyncDuration)}
+                          </span>
+                        </div>
+                      )}
                     </>
                   )}
                   <button
