@@ -156,6 +156,49 @@ The client throws specific error types:
 | `getShopDetails(shopId)` | Fetch shop information |
 | `makeRequest<T>(endpoint)` | Internal method for custom API calls |
 
+## Feed Serving Endpoint
+
+The Feed Serving Endpoint (`src/app/api/feed/route.ts`) provides a public URL for Facebook to poll the product catalog CSV.
+
+### Features
+
+- **Public Access**: No authentication required - Facebook can poll directly
+- **Caching**: 1-hour cache with `Cache-Control: public, max-age=3600`
+- **CORS Support**: Allows cross-origin access from any domain
+- **Error Handling**: Returns 404 if no CSV available, 500 for storage errors
+
+### API
+
+**GET /api/feed**
+
+Returns the Facebook catalog CSV file.
+
+#### Response Headers
+
+| Header | Value |
+|--------|-------|
+| Content-Type | `text/csv; charset=utf-8` |
+| Cache-Control | `public, max-age=3600` |
+| Access-Control-Allow-Origin | `*` |
+
+#### Response Codes
+
+| Code | Description |
+|------|-------------|
+| 200 | Success - returns CSV content |
+| 404 | No catalog feed available - run a sync first |
+| 500 | Storage error - check Blob configuration |
+
+### Usage
+
+1. Run a manual sync via POST `/api/sync/manual` to generate the CSV
+2. Configure Facebook Business Manager to poll `GET /api/feed`
+3. Facebook will refresh the catalog based on the feed
+
+### Environment Variables
+
+The endpoint requires `BLOB_READ_WRITE_TOKEN` to be configured for Vercel Blob access.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

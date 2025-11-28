@@ -60,9 +60,9 @@
 - [ ] Test: Cron triggers successfully
 
 ### Task 10: Feed Endpoint
-- [ ] Create `src/app/api/feed/route.ts`
-- [ ] Serve CSV from Blob
-- [ ] Add caching headers
+- [x] Create `src/app/api/feed/route.ts`
+- [x] Serve CSV from Blob
+- [x] Add caching headers
 - [ ] Test: Facebook can read feed
 
 ## Phase 2: Polish & Deploy

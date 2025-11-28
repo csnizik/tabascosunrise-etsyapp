@@ -3,9 +3,21 @@
  * Handles uploading and managing CSV files for Facebook catalog
  */
 
-import { put, del } from '@vercel/blob';
+import { put, del, list } from '@vercel/blob';
 import { StorageError } from '@/lib/utils/errors';
 import { logInfo, logError } from '@/lib/utils/logger';
+
+/**
+ * Result of fetching the CSV from Blob storage
+ */
+export interface CSVFetchResult {
+  /** The CSV content */
+  content: string;
+  /** The blob URL */
+  url: string;
+  /** When the blob was uploaded */
+  uploadedAt: Date;
+}
 
 /**
  * Default filename for the Facebook catalog CSV
@@ -92,6 +104,84 @@ export async function deleteBlob(url: string): Promise<void> {
     throw new StorageError(
       `Failed to delete blob: ${error instanceof Error ? error.message : 'Unknown error'}`,
       'BLOB_DELETE_ERROR',
+      error instanceof Error ? error : undefined
+    );
+  }
+}
+
+/**
+ * Fetch the CSV content from Vercel Blob storage
+ * Uses the list function to find the catalog file and then fetches its content
+ *
+ * @param filename - Optional filename (default: facebook-catalog.csv)
+ * @returns CSV content, URL, and upload timestamp, or null if not found
+ * @throws StorageError if the fetch fails (but not if file doesn't exist)
+ *
+ * @example
+ * const result = await getCSV();
+ * if (result) {
+ *   console.log(result.content); // CSV content
+ *   console.log(result.url); // https://xxx.public.blob.vercel-storage.com/facebook-catalog.csv
+ * }
+ */
+export async function getCSV(
+  filename: string = CATALOG_FILENAME
+): Promise<CSVFetchResult | null> {
+  logInfo('Fetching CSV from Blob storage', { filename });
+
+  try {
+    // List blobs to find the catalog file
+    const { blobs } = await list({
+      prefix: filename,
+      limit: 1,
+    });
+
+    // Check if the file exists
+    if (blobs.length === 0) {
+      logInfo('CSV not found in Blob storage', { filename });
+      return null;
+    }
+
+    const blob = blobs[0];
+
+    // Verify we have an exact match (prefix might match partial names)
+    if (blob.pathname !== filename) {
+      logInfo('CSV not found in Blob storage (partial match only)', {
+        filename,
+        foundPathname: blob.pathname,
+      });
+      return null;
+    }
+
+    // Fetch the actual CSV content from the blob URL
+    const response = await fetch(blob.url);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch blob content: ${response.status} ${response.statusText}`);
+    }
+
+    const content = await response.text();
+
+    logInfo('CSV fetched successfully', {
+      url: blob.url,
+      size: content.length,
+      uploadedAt: blob.uploadedAt.toISOString(),
+    });
+
+    return {
+      content,
+      url: blob.url,
+      uploadedAt: blob.uploadedAt,
+    };
+  } catch (error) {
+    logError('Failed to fetch CSV from Blob storage', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      filename,
+    });
+
+    throw new StorageError(
+      `Failed to fetch CSV from Blob storage: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      'BLOB_FETCH_ERROR',
       error instanceof Error ? error : undefined
     );
   }
