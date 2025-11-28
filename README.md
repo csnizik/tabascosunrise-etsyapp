@@ -337,6 +337,11 @@ Go to Vercel Dashboard → Your Project → Settings → Environment Variables a
 | `EDGE_CONFIG` | (Auto-set) | Automatically set when linking Edge Config |
 | `BLOB_READ_WRITE_TOKEN` | (Auto-set) | Automatically set when linking Blob store |
 
+> **Important: Edge Config Variables**
+> - `EDGE_CONFIG` - Automatically set by Vercel when you connect Edge Config to your project. Used for READ operations.
+> - `EDGE_CONFIG_ID` + `EDGE_CONFIG_TOKEN` - Must be set manually for WRITE operations (storing tokens, sync metadata).
+> - Both sets are required for the application to function properly.
+
 #### Step 4: Update Etsy App Settings
 
 1. Go to [Etsy Developer Portal](https://www.etsy.com/developers/your-apps)
