@@ -20,7 +20,15 @@ import { StorageError, toPublicError } from '@/lib/utils/errors';
 
 /**
  * Common CORS headers for cross-origin access
- * Allow all origins since Facebook's catalog fetch may come from various domains
+ *
+ * Using '*' for Access-Control-Allow-Origin is intentional for this endpoint:
+ * - Facebook's catalog fetch service may request from various domains
+ * - The endpoint only serves public product catalog data (no sensitive information)
+ * - The endpoint is read-only (GET only) with no authentication required
+ *
+ * Security note: If stricter CORS is needed in the future, Facebook's known
+ * domains can be added here, but this would require ongoing maintenance as
+ * Facebook's infrastructure changes.
  */
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
