@@ -17,6 +17,7 @@ import type {
   EtsyListing,
   EtsyShop,
   EtsyListingsResponse,
+  EtsyShopsResponse,
   RateLimitState,
 } from '@/lib/etsy/types';
 
@@ -529,6 +530,7 @@ export class EtsyClient {
   /**
    * Fetch the shop for a user
    * Returns the first (primary) shop for the authenticated user
+   * Note: Etsy API returns an array of shops; this method returns the first one
    *
    * @param userId - Etsy user ID
    * @returns Shop details object
@@ -543,14 +545,26 @@ export class EtsyClient {
     logInfo('Fetching shop by user ID', { userId });
 
     const endpoint = `/application/users/${userId}/shops`;
-    const response = await this.makeRequest<EtsyShop>(endpoint);
+    const shops = await this.makeRequest<EtsyShopsResponse>(endpoint);
+
+    // Etsy API returns an array of shops - get the first one
+    if (!Array.isArray(shops) || shops.length === 0) {
+      throw new EtsyApiError(
+        `No shops found for user ${userId}`,
+        'NO_SHOPS_FOUND',
+        404
+      );
+    }
+
+    const shop = shops[0];
 
     logInfo('Shop fetched by user ID successfully', {
       userId,
-      shopId: response.shop_id,
-      shopName: response.shop_name,
+      shopId: shop.shop_id,
+      shopName: shop.shop_name,
+      totalShops: shops.length,
     });
 
-    return response;
+    return shop;
   }
 }
