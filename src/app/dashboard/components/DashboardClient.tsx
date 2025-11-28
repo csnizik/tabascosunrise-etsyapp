@@ -210,9 +210,10 @@ export default function DashboardClient({
         setStatus(statusData.data);
       }
 
+      const listingsCount = data.stats?.listingsCount ?? 0;
       setFeedback({
         type: 'success',
-        text: `Successfully synced ${data.stats.listingsCount} listings!`,
+        text: `Successfully synced ${listingsCount} listings!`,
       });
     } catch (err) {
       setFeedback({

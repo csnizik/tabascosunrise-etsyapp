@@ -33,6 +33,20 @@ export interface StatusResponse {
 }
 
 /**
+ * Check if an error indicates Edge Config is not configured
+ * Checks direct code, cause code, and message for configuration errors
+ */
+function isEdgeConfigNotConfigured(error: unknown): boolean {
+  return (
+    error instanceof StorageError &&
+    (error.code === 'EDGE_CONFIG_NOT_CONFIGURED' ||
+      (error.cause instanceof StorageError &&
+        error.cause.code === 'EDGE_CONFIG_NOT_CONFIGURED') ||
+      error.message.includes('not configured'))
+  );
+}
+
+/**
  * GET handler for status endpoint
  * Returns current auth status, sync metadata, and feed URL
  */
@@ -54,15 +68,7 @@ export async function GET(): Promise<NextResponse> {
         response.shopId = tokens.shop_id;
       }
     } catch (error) {
-      // If Edge Config is not configured, treat as not authenticated
-      // Check both direct code and cause for EDGE_CONFIG_NOT_CONFIGURED
-      const isNotConfigured =
-        error instanceof StorageError &&
-        (error.code === 'EDGE_CONFIG_NOT_CONFIGURED' ||
-          (error.cause instanceof StorageError &&
-            error.cause.code === 'EDGE_CONFIG_NOT_CONFIGURED') ||
-          error.message.includes('not configured'));
-      if (isNotConfigured) {
+      if (isEdgeConfigNotConfigured(error)) {
         logInfo('Edge Config not configured, treating as not authenticated');
       } else {
         throw error;
@@ -82,14 +88,7 @@ export async function GET(): Promise<NextResponse> {
         };
       }
     } catch (error) {
-      // If Edge Config is not configured, skip sync metadata
-      const isNotConfigured =
-        error instanceof StorageError &&
-        (error.code === 'EDGE_CONFIG_NOT_CONFIGURED' ||
-          (error.cause instanceof StorageError &&
-            error.cause.code === 'EDGE_CONFIG_NOT_CONFIGURED') ||
-          error.message.includes('not configured'));
-      if (isNotConfigured) {
+      if (isEdgeConfigNotConfigured(error)) {
         logInfo('Edge Config not configured, skipping sync metadata');
       } else {
         throw error;
