@@ -363,7 +363,12 @@ Go to Vercel Dashboard → Your Project → Settings → Environment Variables a
 3. Add Data Feed → Scheduled Feed
 4. Enter Feed URL: `https://your-app.vercel.app/api/feed`
 5. Set schedule (recommended: Daily)
-6. Verify domain ownership is complete
+6. **Verify domain ownership** (required for feed access):
+   - Facebook may require you to verify your Vercel domain
+   - Go to Business Settings → Security Center → Domains
+   - Add `your-app.vercel.app`
+   - Choose verification method (Meta tag or HTML file upload)
+   - For Vercel deployments, use the Meta tag method in your `layout.tsx`
 7. Test catalog import
 
 #### Step 7: Verify Cron Job
