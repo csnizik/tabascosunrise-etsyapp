@@ -101,12 +101,12 @@ export function escapeCSV(value: string): string {
 
 /**
  * Gets the primary image URL from an Etsy listing
- * Returns placeholder if no images available
+ * Returns placeholder if no images available or if URL is missing
  * @param listing - Etsy listing object
  * @returns Image URL string
  */
 export function getPrimaryImageUrl(listing: EtsyListing): string {
-  if (listing.images && listing.images.length > 0) {
+  if (listing.images && listing.images.length > 0 && listing.images[0].url_fullxfull) {
     // Use the full resolution image URL
     return listing.images[0].url_fullxfull;
   }
@@ -128,6 +128,21 @@ export function isValidListing(listing: EtsyListing): boolean {
 }
 
 /**
+ * Determines the availability status for a listing
+ * Digital products are always in stock when active
+ * @param listing - Etsy listing to check
+ * @returns FacebookAvailability status
+ */
+export function getAvailability(listing: EtsyListing): FacebookAvailability {
+  // Digital products are always in stock when listing is active
+  // Only mark as out of stock if listing state indicates unavailability
+  if (listing.state !== 'active' || listing.quantity === 0) {
+    return 'out of stock';
+  }
+  return 'in stock';
+}
+
+/**
  * Transforms a single Etsy listing to a Facebook product
  * @param listing - Etsy listing to transform
  * @param shopName - Shop brand name
@@ -138,7 +153,7 @@ export function formatListing(listing: EtsyListing, shopName: string): FacebookP
     return null;
   }
 
-  const availability: FacebookAvailability = 'in stock'; // Digital products are always in stock
+  const availability = getAvailability(listing);
   const condition: FacebookCondition = 'new'; // All products are new
 
   return {
