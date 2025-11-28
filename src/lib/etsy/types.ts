@@ -171,10 +171,13 @@ export interface EtsyListingsResponse {
 }
 
 /**
- * Etsy API shops response structure (for getUserShops endpoint)
- * The endpoint returns an array of shops for a user
+ * Etsy API shops response structure (for findShops endpoint)
+ * Returns a paginated list of shops matching search criteria
  */
-export type EtsyShopsResponse = EtsyShop[];
+export interface EtsyShopsResponse {
+  count: number;
+  results: EtsyShop[];
+}
 
 /**
  * OAuth token data stored in Edge Config

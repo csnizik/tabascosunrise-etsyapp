@@ -128,16 +128,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     logInfo('Cron sync: Fetching shop details');
     const client = new EtsyClient();
 
-    // Get shop using stored shop_id or look up by user_id
+    // Get shop using stored shop_id or look up by shop name
     let shop;
     if (tokens.shop_id) {
       logInfo('Cron sync: Using stored shop_id', { shopId: tokens.shop_id });
       shop = await client.getShopDetails(tokens.shop_id);
     } else {
-      logInfo('Cron sync: No shop_id stored, fetching shop by user_id', {
-        userId: tokens.user_id,
+      const shopName = process.env.ETSY_SHOP_NAME;
+      if (!shopName) {
+        logError('ETSY_SHOP_NAME environment variable is not set');
+        throw new EtsyApiError(
+          'ETSY_SHOP_NAME environment variable is required when shop_id is not stored',
+          'CONFIG_ERROR',
+          500
+        );
+      }
+      logInfo('Cron sync: No shop_id stored, fetching shop by name', {
+        shopName,
       });
-      shop = await client.getShopByUserId(tokens.user_id);
+      shop = await client.getShopByName(shopName);
     }
 
     logInfo('Cron sync: Shop details fetched', {

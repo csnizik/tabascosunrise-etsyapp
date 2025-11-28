@@ -528,41 +528,41 @@ export class EtsyClient {
   }
 
   /**
-   * Fetch the shop for a user
-   * Returns the first (primary) shop for the authenticated user
-   * Note: Etsy API returns an array of shops; this method returns the first one
+   * Fetch a shop by name
+   * Uses the findShops endpoint to search for a shop by exact name
    *
-   * @param userId - Etsy user ID
+   * @param shopName - Etsy shop name to search for
    * @returns Shop details object
-   * @throws EtsyApiError if user has no shops or on API errors
+   * @throws EtsyApiError if shop is not found or on API errors
    *
    * @example
    * const client = new EtsyClient();
-   * const shop = await client.getShopByUserId('12345');
-   * console.log(`Shop name: ${shop.shop_name}`);
+   * const shop = await client.getShopByName('TabascoSunrise');
+   * console.log(`Shop ID: ${shop.shop_id}`);
    */
-  async getShopByUserId(userId: string): Promise<EtsyShop> {
-    logInfo('Fetching shop by user ID', { userId });
+  async getShopByName(shopName: string): Promise<EtsyShop> {
+    logInfo('Fetching shop by name', { shopName });
 
-    const endpoint = `/application/users/${userId}/shops`;
-    const shops = await this.makeRequest<EtsyShopsResponse>(endpoint);
+    // Encode the shop name for URL safety
+    const encodedShopName = encodeURIComponent(shopName);
+    const endpoint = `/application/shops?shop_name=${encodedShopName}`;
+    const response = await this.makeRequest<EtsyShopsResponse>(endpoint);
 
-    // Etsy API returns an array of shops - get the first one
-    if (!Array.isArray(shops) || shops.length === 0) {
+    // Check if any shops were found
+    if (!response.results || response.results.length === 0) {
       throw new EtsyApiError(
-        `No shops found for user ${userId}`,
+        `No shop found with name "${shopName}"`,
         'NO_SHOPS_FOUND',
         404
       );
     }
 
-    const shop = shops[0];
+    const shop = response.results[0];
 
-    logInfo('Shop fetched by user ID successfully', {
-      userId,
+    logInfo('Shop fetched by name successfully', {
+      shopName,
       shopId: shop.shop_id,
-      shopName: shop.shop_name,
-      totalShops: shops.length,
+      totalResults: response.count,
     });
 
     return shop;
