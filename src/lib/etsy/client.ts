@@ -3,7 +3,7 @@
  * Handles authentication, rate limiting, and provides methods for Etsy API calls
  */
 
-import { TokenError, EtsyApiError, RateLimitError, ConfigError } from '@/lib/utils/errors';
+import { TokenError, EtsyApiError, RateLimitError, ConfigError, StorageError } from '@/lib/utils/errors';
 import { logInfo, logError, logWarn } from '@/lib/utils/logger';
 import {
   getEtsyTokens,
@@ -30,6 +30,8 @@ const RATE_LIMIT = {
   QPD: 5000,
   /** Time window in milliseconds for QPS tracking */
   SECOND_WINDOW_MS: 1000,
+  /** Buffer time in milliseconds added when waiting for rate limit window */
+  BUFFER_MS: 10,
 };
 
 /**
@@ -42,6 +44,8 @@ const RETRY_CONFIG = {
   BASE_DELAY_MS: 1000,
   /** Maximum delay in milliseconds */
   MAX_DELAY_MS: 30000,
+  /** Maximum jitter factor (percentage of delay to add as randomness) */
+  JITTER_FACTOR: 0.3,
 };
 
 /**
@@ -96,11 +100,7 @@ export async function getValidToken(): Promise<EtsyTokens> {
     return refreshedTokens;
   } catch (error) {
     // Check if this is a refresh token expiration
-    if (
-      error instanceof Error &&
-      'code' in error &&
-      (error as { code: string }).code === 'REFRESH_TOKEN_EXPIRED'
-    ) {
+    if (error instanceof StorageError && error.code === 'REFRESH_TOKEN_EXPIRED') {
       throw new TokenError(
         'Etsy authorization has expired (refresh token expired). Please re-authorize.',
         'REFRESH_TOKEN_EXPIRED'
@@ -127,7 +127,8 @@ async function getOrCreateRateLimitState(): Promise<RateLimitState> {
   let state = await getRateLimitState();
 
   const now = new Date();
-  const todayMidnightUTC = new Date(
+  // Calculate next midnight UTC (tomorrow at 00:00:00 UTC) for daily reset
+  const nextMidnightUTC = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0)
   );
 
@@ -135,7 +136,7 @@ async function getOrCreateRateLimitState(): Promise<RateLimitState> {
   if (!state) {
     state = {
       daily_count: 0,
-      daily_reset: todayMidnightUTC.toISOString(),
+      daily_reset: nextMidnightUTC.toISOString(),
       second_timestamps: [],
     };
     await storeRateLimitState(state);
@@ -147,7 +148,7 @@ async function getOrCreateRateLimitState(): Promise<RateLimitState> {
   if (now >= resetTime) {
     state = {
       daily_count: 0,
-      daily_reset: todayMidnightUTC.toISOString(),
+      daily_reset: nextMidnightUTC.toISOString(),
       second_timestamps: [],
     };
     await storeRateLimitState(state);
@@ -194,13 +195,13 @@ async function waitForRateLimit(): Promise<void> {
 
     if (waitTime > 0) {
       logInfo('Rate limit: waiting for QPS window', { waitTimeMs: waitTime });
-      await delay(waitTime + 10); // Add small buffer
+      await delay(waitTime + RATE_LIMIT.BUFFER_MS);
     }
   }
 
-  // Update state with new request
-  const newTimestamps = cleanupTimestamps([...state.second_timestamps, Date.now()]);
-  newTimestamps.push(Date.now());
+  // Update state with new request timestamp
+  const currentTimestamp = Date.now();
+  const newTimestamps = cleanupTimestamps([...state.second_timestamps, currentTimestamp]);
 
   await storeRateLimitState({
     ...state,
@@ -229,7 +230,7 @@ function delay(ms: number): Promise<void> {
  */
 function calculateBackoffDelay(attempt: number): number {
   const exponentialDelay = RETRY_CONFIG.BASE_DELAY_MS * Math.pow(2, attempt);
-  const jitter = Math.random() * 0.3 * exponentialDelay; // Add up to 30% jitter
+  const jitter = Math.random() * RETRY_CONFIG.JITTER_FACTOR * exponentialDelay;
   return Math.min(exponentialDelay + jitter, RETRY_CONFIG.MAX_DELAY_MS);
 }
 
@@ -241,6 +242,34 @@ function calculateBackoffDelay(attempt: number): number {
 function isRetryableError(status: number): boolean {
   // Retry on rate limit (429) and server errors (5xx)
   return status === 429 || (status >= 500 && status < 600);
+}
+
+/**
+ * Validate and sanitize a shop ID for use in API endpoints
+ * Etsy shop IDs are numeric strings
+ * @param shopId - The shop ID to validate
+ * @returns The validated shop ID
+ * @throws EtsyApiError if the shop ID is invalid
+ */
+function validateShopId(shopId: string): string {
+  // Trim whitespace
+  const trimmed = shopId.trim();
+
+  // Check if empty
+  if (!trimmed) {
+    throw new EtsyApiError('Shop ID cannot be empty', 'INVALID_SHOP_ID', 400);
+  }
+
+  // Etsy shop IDs are numeric - validate format
+  if (!/^\d+$/.test(trimmed)) {
+    throw new EtsyApiError(
+      `Invalid shop ID format: "${shopId}". Shop ID must be a numeric string.`,
+      'INVALID_SHOP_ID',
+      400
+    );
+  }
+
+  return trimmed;
 }
 
 /**
@@ -417,9 +446,9 @@ export class EtsyClient {
    * Fetch all active listings for a shop with pagination support
    * Automatically handles pagination for shops with more than 100 listings
    *
-   * @param shopId - Etsy shop ID
+   * @param shopId - Etsy shop ID (numeric string)
    * @returns Array of all active listings
-   * @throws EtsyApiError on API errors
+   * @throws EtsyApiError on API errors or invalid shop ID
    *
    * @example
    * const client = new EtsyClient();
@@ -427,21 +456,22 @@ export class EtsyClient {
    * console.log(`Found ${listings.length} listings`);
    */
   async getShopListings(shopId: string): Promise<EtsyListing[]> {
+    const validatedShopId = validateShopId(shopId);
     const allListings: EtsyListing[] = [];
     let offset = 0;
     let hasMore = true;
 
-    logInfo('Fetching shop listings', { shopId });
+    logInfo('Fetching shop listings', { shopId: validatedShopId });
 
     while (hasMore) {
-      const endpoint = `/application/shops/${shopId}/listings/active?limit=${DEFAULT_LIMIT}&offset=${offset}&includes=images`;
+      const endpoint = `/application/shops/${validatedShopId}/listings/active?limit=${DEFAULT_LIMIT}&offset=${offset}&includes=images`;
 
       const response = await this.makeRequest<EtsyListingsResponse>(endpoint);
 
       allListings.push(...response.results);
 
       logInfo('Fetched listings page', {
-        shopId,
+        shopId: validatedShopId,
         offset,
         count: response.results.length,
         total: response.count,
@@ -461,7 +491,7 @@ export class EtsyClient {
     }
 
     logInfo('Finished fetching all listings', {
-      shopId,
+      shopId: validatedShopId,
       totalListings: allListings.length,
     });
 
@@ -471,9 +501,9 @@ export class EtsyClient {
   /**
    * Fetch shop details
    *
-   * @param shopId - Etsy shop ID
+   * @param shopId - Etsy shop ID (numeric string)
    * @returns Shop details object
-   * @throws EtsyApiError on API errors
+   * @throws EtsyApiError on API errors or invalid shop ID
    *
    * @example
    * const client = new EtsyClient();
@@ -481,13 +511,15 @@ export class EtsyClient {
    * console.log(`Shop name: ${shop.shop_name}`);
    */
   async getShopDetails(shopId: string): Promise<EtsyShop> {
-    logInfo('Fetching shop details', { shopId });
+    const validatedShopId = validateShopId(shopId);
 
-    const endpoint = `/application/shops/${shopId}`;
+    logInfo('Fetching shop details', { shopId: validatedShopId });
+
+    const endpoint = `/application/shops/${validatedShopId}`;
     const response = await this.makeRequest<EtsyShop>(endpoint);
 
     logInfo('Shop details fetched successfully', {
-      shopId,
+      shopId: validatedShopId,
       shopName: response.shop_name,
     });
 
