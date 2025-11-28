@@ -10,7 +10,7 @@ import { createClient } from '@vercel/edge-config';
 import { StorageError } from '@/lib/utils/errors';
 import { logInfo, logError } from '@/lib/utils/logger';
 import type { OAuthStateData } from '@/lib/etsy/oauth';
-import type { EtsyTokens } from '@/lib/etsy/types';
+import type { EtsyTokens, RateLimitState } from '@/lib/etsy/types';
 
 /**
  * Get the Edge Config client
@@ -360,6 +360,49 @@ async function deleteFromEdgeConfig(key: string): Promise<void> {
     throw new StorageError(
       `Edge Config delete failed: ${errorText}`,
       'EDGE_CONFIG_DELETE_ERROR'
+    );
+  }
+}
+
+/**
+ * Get rate limit state from Edge Config
+ *
+ * @returns Rate limit state or null if not found
+ */
+export async function getRateLimitState(): Promise<RateLimitState | null> {
+  try {
+    const client = getEdgeConfigClient();
+    const data = await client.get<RateLimitState>('rate_limit_state');
+    return data ?? null;
+  } catch (error) {
+    logError('Failed to retrieve rate limit state', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    throw new StorageError(
+      'Failed to retrieve rate limit state from Edge Config',
+      'EDGE_CONFIG_READ_ERROR',
+      error instanceof Error ? error : undefined
+    );
+  }
+}
+
+/**
+ * Store rate limit state in Edge Config
+ *
+ * @param state - Rate limit state to store
+ */
+export async function storeRateLimitState(state: RateLimitState): Promise<void> {
+  try {
+    await writeToEdgeConfig('rate_limit_state', state);
+    logInfo('Rate limit state stored in Edge Config');
+  } catch (error) {
+    logError('Failed to store rate limit state', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    throw new StorageError(
+      'Failed to store rate limit state in Edge Config',
+      'EDGE_CONFIG_WRITE_ERROR',
+      error instanceof Error ? error : undefined
     );
   }
 }
