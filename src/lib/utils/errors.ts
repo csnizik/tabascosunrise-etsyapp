@@ -154,6 +154,30 @@ export class StorageError extends AppError {
 }
 
 /**
+ * Check if an error indicates Edge Config is not configured
+ * Checks direct code, cause code, and message for configuration errors
+ * @param error - Any error or unknown value
+ * @returns true if the error indicates Edge Config is not configured
+ * @example
+ * try {
+ *   const tokens = await getEtsyTokens();
+ * } catch (error) {
+ *   if (isEdgeConfigNotConfigured(error)) {
+ *     // Handle missing Edge Config gracefully
+ *   }
+ * }
+ */
+export function isEdgeConfigNotConfigured(error: unknown): boolean {
+  return (
+    error instanceof StorageError &&
+    (error.code === 'EDGE_CONFIG_NOT_CONFIGURED' ||
+      (error.cause instanceof StorageError &&
+        error.cause.code === 'EDGE_CONFIG_NOT_CONFIGURED') ||
+      error.message.includes('not configured'))
+  );
+}
+
+/**
  * Safely converts an error to a public-safe response object
  * Never exposes stack traces or sensitive internal details
  * @param err - Any error or unknown value

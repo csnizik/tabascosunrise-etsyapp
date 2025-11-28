@@ -6,7 +6,7 @@
  */
 
 import { getEtsyTokens, isTokenExpired } from '@/lib/storage/edge-config';
-import { StorageError } from '@/lib/utils/errors';
+import { isEdgeConfigNotConfigured } from '@/lib/utils/errors';
 import Link from 'next/link';
 
 /**
@@ -33,11 +33,7 @@ async function getAuthStatus(): Promise<AuthStatus> {
     return { authenticated: false };
   } catch (error) {
     // If Edge Config is not configured, treat as not authenticated
-    if (
-      error instanceof StorageError &&
-      (error.code === 'EDGE_CONFIG_NOT_CONFIGURED' ||
-        error.message.includes('not configured'))
-    ) {
+    if (isEdgeConfigNotConfigured(error)) {
       return { authenticated: false };
     }
     // For other errors, also treat as not authenticated to avoid blocking the page
