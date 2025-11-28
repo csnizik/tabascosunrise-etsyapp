@@ -4,6 +4,16 @@
  */
 
 /**
+ * Facebook product availability status
+ */
+export type FacebookAvailability = 'in stock' | 'out of stock';
+
+/**
+ * Facebook product condition
+ */
+export type FacebookCondition = 'new' | 'refurbished' | 'used';
+
+/**
  * Facebook product for catalog CSV
  * All fields required by Facebook Commerce Manager
  * @property id - Unique product identifier
@@ -20,8 +30,8 @@ export interface FacebookProduct {
   id: string;
   title: string;
   description: string;
-  availability: 'in stock' | 'out of stock';
-  condition: 'new' | 'refurbished' | 'used';
+  availability: FacebookAvailability;
+  condition: FacebookCondition;
   price: string;
   link: string;
   image_link: string;

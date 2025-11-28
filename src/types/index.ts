@@ -15,7 +15,11 @@ export type {
   EtsyTokens,
   RateLimitState,
 } from '@/lib/etsy/types';
-export type { FacebookProduct } from '@/lib/facebook/types';
+export type {
+  FacebookProduct,
+  FacebookAvailability,
+  FacebookCondition,
+} from '@/lib/facebook/types';
 
 /**
  * Sync status type definitions
