@@ -35,7 +35,62 @@ This project uses TypeScript with strict mode enabled. Key configuration and uti
 
 - **Shared Types** (`src/types/index.ts`): Common types like `ApiResponse<T>`, `SyncStatus`, `SyncResult`
 - **Etsy Types** (`src/lib/etsy/types.ts`): `EtsyListing`, `EtsyShop`, `EtsyTokens`, `EtsyPrice`, `EtsyImage`, `RateLimitState`
-- **Facebook Types** (`src/lib/facebook/types.ts`): `FacebookProduct`
+- **Facebook Types** (`src/lib/facebook/types.ts`): `FacebookProduct`, `FacebookAvailability`, `FacebookCondition`
+
+## Facebook Catalog Formatter
+
+The Facebook Catalog formatter (`src/lib/facebook/catalog.ts`) transforms Etsy listings into Facebook Product Catalog CSV format.
+
+### Features
+
+- **CSV Generation**: Produces Facebook-compliant CSV with all required fields
+- **Data Transformation**: Converts Etsy price format to Facebook format (e.g., "12.99 USD")
+- **HTML Sanitization**: Strips HTML tags from descriptions with iterative processing
+- **Field Validation**: Truncates titles (150 chars) and descriptions (5000 chars)
+- **CSV Escaping**: Properly escapes commas, quotes, and newlines
+- **Availability Detection**: Checks listing state and quantity for accurate availability
+- **Placeholder Images**: Uses placeholder for listings without images
+
+### Usage
+
+```typescript
+import { formatListingsToCSV } from '@/lib/facebook/catalog';
+import type { EtsyListing } from '@/lib/etsy/types';
+
+// Transform Etsy listings to Facebook CSV
+const listings: EtsyListing[] = await etsyClient.getShopListings('12345');
+const csv = formatListingsToCSV(listings, 'TabascoSunrise');
+
+// CSV output example:
+// id,title,description,availability,condition,price,link,image_link,brand
+// 123456,Pattern Title,Description text,in stock,new,12.99 USD,https://...,https://...,TabascoSunrise
+```
+
+### CSV Fields
+
+| Field | Source | Notes |
+|-------|--------|-------|
+| id | `listing_id` | Converted to string |
+| title | `title` | Truncated to 150 chars |
+| description | `description` | HTML stripped, truncated to 5000 chars |
+| availability | `state`, `quantity` | "in stock" if active with quantity > 0 |
+| condition | - | Always "new" |
+| price | `price` | Formatted as "XX.XX USD" |
+| link | `url` | Direct Etsy listing URL |
+| image_link | `images[0].url_fullxfull` | Placeholder if no image |
+| brand | `shopName` | Passed as parameter |
+
+### Helper Functions
+
+| Function | Description |
+|----------|-------------|
+| `formatPrice(price)` | Converts Etsy price object to "XX.XX USD" format |
+| `sanitizeDescription(text)` | Strips HTML, normalizes whitespace, truncates |
+| `truncateTitle(title)` | Truncates to max 150 characters |
+| `escapeCSV(value)` | Escapes special characters for CSV |
+| `getPrimaryImageUrl(listing)` | Gets first image URL or placeholder |
+| `getAvailability(listing)` | Determines in stock/out of stock status |
+| `isValidListing(listing)` | Validates required fields are present |
 
 ### Environment Variables
 
