@@ -557,12 +557,30 @@ export class EtsyClient {
       );
     }
 
-    const shop = response.results[0];
+    // Find exact match (case-insensitive for safety)
+    const shop = response.results.find(
+      (s) => s.shop_name.toLowerCase() === shopName.toLowerCase()
+    );
+
+    if (!shop) {
+      logError('No exact shop name match found', {
+        requestedName: shopName,
+        foundShops: response.results.map((s) => s.shop_name),
+      });
+      throw new EtsyApiError(
+        `No shop found with exact name "${shopName}". Found similar: ${response.results
+          .map((s) => s.shop_name)
+          .join(', ')}`,
+        'NO_EXACT_MATCH',
+        404
+      );
+    }
 
     logInfo('Shop fetched by name successfully', {
       shopName,
       shopId: shop.shop_id,
       totalResults: response.count,
+      exactMatch: shop.shop_name === shopName,
     });
 
     return shop;
