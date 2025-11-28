@@ -5,6 +5,7 @@
 
 import type { EtsyListing, EtsyPrice } from '@/lib/etsy/types';
 import type { FacebookProduct, FacebookAvailability, FacebookCondition } from './types';
+import { logWarn } from '@/lib/utils/logger';
 
 /** Maximum length for Facebook product title */
 const MAX_TITLE_LENGTH = 150;
@@ -37,7 +38,9 @@ const CSV_HEADERS = [
  * // Returns: "12.99 USD"
  */
 export function formatPrice(price: EtsyPrice): string {
-  const value = price.amount / price.divisor;
+  // Prevent division by zero - default to divisor of 1 if zero or missing
+  const divisor = price.divisor || 1;
+  const value = price.amount / divisor;
   return `${value.toFixed(2)} ${price.currency_code}`;
 }
 
@@ -165,10 +168,13 @@ export function formatListing(listing: EtsyListing, shopName: string): FacebookP
   const availability = getAvailability(listing);
   const condition: FacebookCondition = 'new'; // All products are new
 
+  // Use title as fallback if description is missing or empty
+  const descriptionText = listing.description?.trim() || listing.title;
+
   return {
     id: listing.listing_id.toString(),
     title: truncateTitle(listing.title),
-    description: sanitizeDescription(listing.description || ''),
+    description: sanitizeDescription(descriptionText),
     availability,
     condition,
     price: formatPrice(listing.price),
@@ -178,13 +184,17 @@ export function formatListing(listing: EtsyListing, shopName: string): FacebookP
   };
 }
 
+/** UTF-8 BOM for Excel compatibility with international characters */
+const UTF8_BOM = '\uFEFF';
+
 /**
  * Generates a CSV string from an array of Facebook products
+ * Includes UTF-8 BOM for Excel compatibility with international characters
  * @param products - Array of FacebookProduct objects
  * @returns CSV string with headers and product rows
  */
 export function generateCSV(products: FacebookProduct[]): string {
-  // Start with headers
+  // Start with BOM and headers
   const rows: string[] = [CSV_HEADERS.join(',')];
 
   // Add product rows
@@ -196,7 +206,8 @@ export function generateCSV(products: FacebookProduct[]): string {
     rows.push(row.join(','));
   }
 
-  return rows.join('\n');
+  // Add UTF-8 BOM at the start for Excel compatibility
+  return UTF8_BOM + rows.join('\n');
 }
 
 /**
@@ -226,6 +237,16 @@ export function formatListingsToCSV(listings: EtsyListing[], shopName: string): 
     const product = formatListing(listing, shopName);
     if (product) {
       products.push(product);
+    } else {
+      // Log invalid listings for debugging
+      logWarn('Skipping invalid listing', {
+        listing_id: listing?.listing_id,
+        title: listing?.title?.substring(0, 50),
+        reason: !listing?.listing_id ? 'missing listing_id' :
+                !listing?.title?.trim() ? 'missing title' :
+                !listing?.price ? 'missing price' :
+                !listing?.url ? 'missing url' : 'unknown',
+      });
     }
   }
 
