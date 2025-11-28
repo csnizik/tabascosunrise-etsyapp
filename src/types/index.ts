@@ -6,7 +6,15 @@
  */
 
 // Re-export domain-specific types for convenience
-export type { EtsyPrice, EtsyImage, EtsyListing, EtsyTokens } from '@/lib/etsy/types';
+export type {
+  EtsyPrice,
+  EtsyImage,
+  EtsyListing,
+  EtsyShop,
+  EtsyListingsResponse,
+  EtsyTokens,
+  RateLimitState,
+} from '@/lib/etsy/types';
 export type { FacebookProduct } from '@/lib/facebook/types';
 
 /**

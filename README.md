@@ -34,7 +34,7 @@ This project uses TypeScript with strict mode enabled. Key configuration and uti
 ### Type Definitions
 
 - **Shared Types** (`src/types/index.ts`): Common types like `ApiResponse<T>`, `SyncStatus`, `SyncResult`
-- **Etsy Types** (`src/lib/etsy/types.ts`): `EtsyListing`, `EtsyTokens`, `EtsyPrice`, `EtsyImage`
+- **Etsy Types** (`src/lib/etsy/types.ts`): `EtsyListing`, `EtsyShop`, `EtsyTokens`, `EtsyPrice`, `EtsyImage`, `RateLimitState`
 - **Facebook Types** (`src/lib/facebook/types.ts`): `FacebookProduct`
 
 ### Environment Variables
@@ -43,6 +43,63 @@ This project uses TypeScript with strict mode enabled. Key configuration and uti
 |----------|-------------|
 | `LOG_ENABLED` | Set to `true` to enable logging in production |
 | `NODE_ENV` | Standard Node.js environment (`development`, `production`) |
+| `ETSY_API_KEY` | Etsy API key from Developer Portal |
+| `EDGE_CONFIG` | Vercel Edge Config connection string (auto-set by Vercel) |
+| `EDGE_CONFIG_ID` | Edge Config ID for write operations |
+| `EDGE_CONFIG_TOKEN` | Edge Config token for write operations |
+
+## Etsy API Client
+
+The Etsy API client (`src/lib/etsy/client.ts`) provides a robust interface for interacting with the Etsy API.
+
+### Features
+
+- **Automatic Token Refresh**: Tokens are automatically refreshed before API calls if expired
+- **Rate Limiting**: Respects Etsy's rate limits (5 requests/second, 5000 requests/day)
+- **Retry Logic**: Exponential backoff with jitter for transient errors (429, 5xx)
+- **Pagination**: Automatically handles pagination for listings
+- **Comprehensive Logging**: Request/response logging for debugging
+
+### Usage
+
+```typescript
+import { EtsyClient } from '@/lib/etsy/client';
+
+// Create client instance
+const client = new EtsyClient();
+
+// Fetch all active listings for a shop
+const listings = await client.getShopListings('12345');
+
+// Fetch shop details
+const shop = await client.getShopDetails('12345');
+```
+
+### Rate Limiting
+
+The client implements a token bucket algorithm for per-second limiting and tracks daily request counts in Edge Config:
+
+- **QPS Limit**: 5 requests per second
+- **QPD Limit**: 5000 requests per day
+- **Daily Reset**: Midnight UTC
+
+When limits are approached, the client automatically queues requests with appropriate delays.
+
+### Error Handling
+
+The client throws specific error types:
+- `TokenError`: Authentication failures
+- `RateLimitError`: Rate limit exceeded
+- `EtsyApiError`: Other API errors with status code and endpoint context
+- `ConfigError`: Missing configuration
+
+### API Methods
+
+| Method | Description |
+|--------|-------------|
+| `getShopListings(shopId)` | Fetch all active listings with pagination |
+| `getShopDetails(shopId)` | Fetch shop information |
+| `makeRequest<T>(endpoint)` | Internal method for custom API calls |
 
 ## Learn More
 
