@@ -171,6 +171,12 @@ export interface EtsyListingsResponse {
 }
 
 /**
+ * Etsy API shops response structure (for getUserShops endpoint)
+ * The endpoint returns an array of shops for a user
+ */
+export type EtsyShopsResponse = EtsyShop[];
+
+/**
  * OAuth token data stored in Edge Config
  * @property access_token - Current access token for API calls
  * @property refresh_token - Token used to refresh access_token
