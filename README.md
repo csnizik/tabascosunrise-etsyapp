@@ -368,9 +368,15 @@ Go to Vercel Dashboard → Your Project → Settings → Environment Variables a
 
 #### Step 7: Verify Cron Job
 
-1. Go to Vercel Dashboard → Your Project → Settings → Cron Jobs
-2. Verify the cron schedule is visible: `0 6 * * *` (daily at 6:00 AM UTC)
-3. The cron job is defined in `vercel.json`
+1. Ensure `CRON_SECRET` is set (from Step 3)
+2. Go to Vercel Dashboard → Your Project → Settings → Cron Jobs
+3. Verify the cron schedule is visible: `0 6 * * *` (daily at 6:00 AM UTC)
+4. **Test the cron job:**
+   - Click "Run" next to the `/api/sync/cron` job
+   - Go to Deployments → Logs
+   - Search for "Cron sync completed successfully"
+   - Verify no errors appear
+5. The cron job is defined in `vercel.json`
 
 #### Step 8: Complete Workflow Verification
 
