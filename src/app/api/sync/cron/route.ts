@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { EtsyClient, getValidToken } from '@/lib/etsy/client';
 import { formatListingsToCSV } from '@/lib/facebook/catalog';
 import { uploadCSV } from '@/lib/storage/blob';
@@ -39,7 +40,32 @@ interface CronSyncResponse {
 }
 
 /**
+ * Performs a timing-safe comparison of two strings
+ * Prevents timing attacks when comparing secrets
+ * @param a - First string
+ * @param b - Second string
+ * @returns true if strings are equal, false otherwise
+ */
+function safeCompare(a: string, b: string): boolean {
+  try {
+    const bufA = Buffer.from(a);
+    const bufB = Buffer.from(b);
+
+    // If lengths differ, compare against a same-length buffer to prevent timing leaks
+    if (bufA.length !== bufB.length) {
+      return timingSafeEqual(bufA, bufA) && false;
+    }
+
+    return timingSafeEqual(bufA, bufB);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Validates the cron secret from the Authorization header
+ * Uses timing-safe comparison to prevent timing attacks
+ * Note: request.headers.get() normalizes header names to lowercase
  * @param request - Incoming request
  * @returns true if valid, false otherwise
  */
@@ -53,12 +79,14 @@ function validateCronSecret(request: NextRequest): boolean {
     return false;
   }
 
-  // Validate the Bearer token
-  if (authHeader !== `Bearer ${expectedSecret}`) {
+  // If no auth header provided, deny access
+  if (!authHeader) {
     return false;
   }
 
-  return true;
+  // Validate the Bearer token using timing-safe comparison
+  const expectedHeader = `Bearer ${expectedSecret}`;
+  return safeCompare(authHeader, expectedHeader);
 }
 
 /**
