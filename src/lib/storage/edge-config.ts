@@ -406,3 +406,70 @@ export async function storeRateLimitState(state: RateLimitState): Promise<void> 
     );
   }
 }
+
+/**
+ * Sync metadata structure stored in Edge Config
+ */
+interface SyncMetadata {
+  timestamp: string;
+  status: 'success' | 'failure';
+  listingsCount: number;
+  feedUrl?: string;
+}
+
+/**
+ * Store sync metadata after a sync operation
+ * Tracks the last sync status, timestamp, listing count, and feed URL
+ *
+ * @param metadata - Sync metadata to store
+ * @throws StorageError if the operation fails
+ *
+ * @example
+ * await storeSyncMetadata({
+ *   timestamp: new Date().toISOString(),
+ *   status: 'success',
+ *   listingsCount: 42,
+ *   feedUrl: 'https://xxx.blob.vercel-storage.com/facebook-catalog.csv'
+ * });
+ */
+export async function storeSyncMetadata(metadata: SyncMetadata): Promise<void> {
+  try {
+    await writeToEdgeConfig('last_sync_metadata', metadata);
+    logInfo('Sync metadata stored in Edge Config', {
+      timestamp: metadata.timestamp,
+      status: metadata.status,
+      listingsCount: metadata.listingsCount,
+    });
+  } catch (error) {
+    logError('Failed to store sync metadata', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    throw new StorageError(
+      'Failed to store sync metadata in Edge Config',
+      'EDGE_CONFIG_WRITE_ERROR',
+      error instanceof Error ? error : undefined
+    );
+  }
+}
+
+/**
+ * Retrieve the last sync metadata
+ *
+ * @returns Sync metadata or null if no sync has been performed
+ */
+export async function getSyncMetadata(): Promise<SyncMetadata | null> {
+  try {
+    const client = getEdgeConfigClient();
+    const data = await client.get<SyncMetadata>('last_sync_metadata');
+    return data ?? null;
+  } catch (error) {
+    logError('Failed to retrieve sync metadata', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    throw new StorageError(
+      'Failed to retrieve sync metadata from Edge Config',
+      'EDGE_CONFIG_READ_ERROR',
+      error instanceof Error ? error : undefined
+    );
+  }
+}

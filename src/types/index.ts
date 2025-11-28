@@ -45,6 +45,45 @@ export interface SyncResult {
 }
 
 /**
+ * Sync metadata stored in Edge Config
+ * Tracks the last sync operation status
+ * @property timestamp - ISO 8601 timestamp when sync was performed
+ * @property status - Whether the sync succeeded or failed
+ * @property listingsCount - Number of listings synced
+ * @property feedUrl - Public URL of the uploaded CSV feed
+ */
+export interface SyncMetadata {
+  timestamp: string;
+  status: 'success' | 'failure';
+  listingsCount: number;
+  feedUrl?: string;
+}
+
+/**
+ * Sync statistics returned by the sync endpoint
+ * @property listingsCount - Number of listings synced
+ * @property timestamp - ISO 8601 timestamp when sync completed
+ * @property duration - Time taken for sync in milliseconds
+ */
+export interface SyncStats {
+  listingsCount: number;
+  timestamp: string;
+  duration: number;
+}
+
+/**
+ * Success response from the manual sync endpoint
+ * @property success - Always true for success responses
+ * @property feedUrl - Public URL of the uploaded CSV feed
+ * @property stats - Sync statistics
+ */
+export interface ManualSyncResponse {
+  success: true;
+  feedUrl: string;
+  stats: SyncStats;
+}
+
+/**
  * Standard API response wrapper
  * @template T - Type of the response data
  * @property success - Whether the request succeeded
