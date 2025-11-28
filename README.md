@@ -263,8 +263,177 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Production Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This section guides you through deploying the application to Vercel and configuring all necessary services.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Production URLs
+
+Once deployed, your application will be available at:
+
+| Endpoint | URL | Description |
+|----------|-----|-------------|
+| Dashboard | `https://your-app.vercel.app/dashboard` | Main dashboard for monitoring and manual sync |
+| Feed URL | `https://your-app.vercel.app/api/feed` | Facebook catalog CSV feed |
+| Feed Stats | `https://your-app.vercel.app/api/feed/stats` | Feed statistics endpoint |
+| Feed Validate | `https://your-app.vercel.app/api/feed/validate` | Feed validation endpoint |
+| OAuth Callback | `https://your-app.vercel.app/api/auth/etsy/callback` | Etsy OAuth callback URL |
+| OAuth Authorize | `https://your-app.vercel.app/api/auth/etsy/authorize` | Initiate OAuth flow |
+| Manual Sync | `https://your-app.vercel.app/api/sync/manual` | Manual sync trigger (POST) |
+| Cron Sync | `https://your-app.vercel.app/api/sync/cron` | Automated cron sync (GET) |
+| Status | `https://your-app.vercel.app/api/status` | Application status endpoint |
+
+> **Note**: Replace `your-app.vercel.app` with your actual Vercel deployment URL.
+
+### Deployment Checklist
+
+#### Step 1: Deploy to Vercel
+
+1. **Connect GitHub Repository**
+   - Go to [Vercel Dashboard](https://vercel.com/dashboard)
+   - Click "Add New..." → "Project"
+   - Import from GitHub and select `tabascosunrise-etsyapp`
+   - Configure build settings (Next.js auto-detected)
+   - Deploy from `main` branch
+
+2. **Verify Initial Deployment**
+   - Wait for the first deployment to complete
+   - Note your deployment URL (e.g., `your-app.vercel.app`)
+
+#### Step 2: Create Vercel Storage Resources
+
+1. **Create Edge Config Store**
+   - Go to Vercel Dashboard → Your Project → Storage
+   - Click "Create Database" → "Edge Config"
+   - Name it (e.g., `tabascosunrise-edge-config`)
+   - Click "Connect to Project" to link to your app
+   - The `EDGE_CONFIG` variable is auto-set
+
+2. **Create Blob Store**
+   - Go to Vercel Dashboard → Your Project → Storage
+   - Click "Create Database" → "Blob"
+   - Name it (e.g., `tabascosunrise-blob`)
+   - Click "Connect to Project" to link to your app
+   - The `BLOB_READ_WRITE_TOKEN` variable is auto-set
+
+3. **Get Edge Config Credentials for Write Access**
+   - Go to Edge Config → Settings
+   - Copy the **Edge Config ID** (format: `ecfg_xxxxx`)
+   - Create a Vercel API Token at [Account Settings → Tokens](https://vercel.com/account/tokens)
+   - Token scope: Full access or Edge Config read/write
+
+#### Step 3: Configure Environment Variables
+
+Go to Vercel Dashboard → Your Project → Settings → Environment Variables and add:
+
+| Variable | Value | Notes |
+|----------|-------|-------|
+| `ETSY_API_KEY` | Your API key | From [Etsy Developer Portal](https://www.etsy.com/developers/your-apps) |
+| `ETSY_REDIRECT_URI` | `https://your-app.vercel.app/api/auth/etsy/callback` | Update to production URL |
+| `ETSY_SCOPES` | `listings_r shops_r` | Required OAuth scopes |
+| `EDGE_CONFIG_ID` | `ecfg_xxxxx` | From Edge Config settings |
+| `EDGE_CONFIG_TOKEN` | Your Vercel API token | For Edge Config write operations |
+| `CRON_SECRET` | Random secret | Generate with `openssl rand -base64 32` |
+| `EDGE_CONFIG` | (Auto-set) | Automatically set when linking Edge Config |
+| `BLOB_READ_WRITE_TOKEN` | (Auto-set) | Automatically set when linking Blob store |
+
+> **Important: Edge Config Variables**
+> - `EDGE_CONFIG` - Automatically set by Vercel when you connect Edge Config to your project. Used for READ operations.
+> - `EDGE_CONFIG_ID` + `EDGE_CONFIG_TOKEN` - Must be set manually for WRITE operations (storing tokens, sync metadata).
+> - Both sets are required for the application to function properly.
+
+#### Step 4: Update Etsy App Settings
+
+1. Go to [Etsy Developer Portal](https://www.etsy.com/developers/your-apps)
+2. Select your app
+3. Add production callback URL: `https://your-app.vercel.app/api/auth/etsy/callback`
+4. Verify scopes include `listings_r` and `shops_r`
+
+#### Step 5: Test OAuth Flow in Production
+
+1. Visit `https://your-app.vercel.app/api/auth/etsy/authorize`
+2. Complete the Etsy authorization
+3. Verify redirect to callback and successful token storage
+4. Check the dashboard shows "Connected" status
+
+#### Step 6: Configure Facebook Business Manager
+
+1. Go to [Facebook Business Manager](https://business.facebook.com/)
+2. Navigate to Commerce Manager → Catalog → Data Sources
+3. Add Data Feed → Scheduled Feed
+4. Enter Feed URL: `https://your-app.vercel.app/api/feed`
+5. Set schedule (recommended: Daily)
+6. **Verify domain ownership** (required for feed access):
+   - Facebook may require you to verify your Vercel domain
+   - Go to Business Settings → Security Center → Domains
+   - Add `your-app.vercel.app`
+   - Choose verification method (Meta tag or HTML file upload)
+   - For Vercel deployments, use the Meta tag method in your `layout.tsx`
+7. Test catalog import
+
+#### Step 7: Verify Cron Job
+
+1. Ensure `CRON_SECRET` is set (from Step 3)
+2. Go to Vercel Dashboard → Your Project → Settings → Cron Jobs
+3. Verify the cron schedule is visible: `0 6 * * *` (daily at 6:00 AM UTC)
+4. **Test the cron job:**
+   - Click "Run" next to the `/api/sync/cron` job
+   - Go to Deployments → Logs
+   - Search for "Cron sync completed successfully"
+   - Verify no errors appear
+   - If you see "401 Unauthorized", verify `CRON_SECRET` is set correctly and redeploy
+5. The cron job is defined in `vercel.json`
+
+#### Step 8: Complete Workflow Verification
+
+Run through the complete workflow to verify everything works:
+
+- [ ] OAuth flow completes successfully
+- [ ] Manual sync completes via dashboard
+- [ ] CSV accessible at `/api/feed`
+- [ ] Feed stats available at `/api/feed/stats`
+- [ ] Feed validation passes at `/api/feed/validate`
+- [ ] Facebook catalog imports successfully
+- [ ] No errors in Vercel logs
+- [ ] Cron job visible in Vercel dashboard
+
+### Troubleshooting
+
+#### OAuth Errors
+
+- **State mismatch**: Clear cookies and restart the OAuth flow
+- **Invalid callback URL**: Ensure production callback is registered in Etsy Developer Portal
+- **Token refresh failed**: Re-authorize via `/api/auth/etsy/authorize`
+
+#### Sync Errors
+
+- **Missing tokens**: Run OAuth flow first
+- **Rate limit exceeded**: Wait and retry, check Etsy API limits
+- **Blob upload failed**: Verify `BLOB_READ_WRITE_TOKEN` is set
+
+#### Feed Errors
+
+- **404 No feed**: Run a manual sync first
+- **Empty CSV**: Check Etsy shop has active listings
+
+#### Cron Job Not Running
+
+- Verify `CRON_SECRET` is set in environment variables
+- Check Vercel logs for cron execution
+- Cron jobs only run in production deployments
+
+### Monitoring
+
+- **Vercel Logs**: View runtime logs in Vercel Dashboard → Deployments → Logs
+- **Feed Stats**: Check `/api/feed/stats` for feed health
+- **Feed Validate**: Verify feed structure at `/api/feed/validate`
+- **Status Endpoint**: Check application status at `/api/status`
+
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
