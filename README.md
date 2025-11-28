@@ -165,7 +165,11 @@ The Feed Serving Endpoint (`src/app/api/feed/route.ts`) provides a public URL fo
 - **Public Access**: No authentication required - Facebook can poll directly
 - **Caching**: 1-hour cache with `Cache-Control: public, max-age=3600`
 - **ETag Support**: Conditional requests with `If-None-Match` return 304 Not Modified when unchanged
+- **Last-Modified Header**: For cache validation with upload timestamp
+- **Content-Length Header**: Helps clients pre-allocate buffers
+- **Gzip Compression**: Automatic compression for payloads > 1KB when client supports it
 - **CORS Support**: Allows cross-origin access from any domain
+- **Enhanced Metrics**: Logs user-agent, referer, IP, and Facebook bot detection
 - **Error Handling**: Returns 404 if no CSV available, 500 for storage errors
 
 ### API
@@ -181,6 +185,9 @@ Returns the Facebook catalog CSV file.
 | Content-Type | `text/csv; charset=utf-8` |
 | Cache-Control | `public, max-age=3600` |
 | ETag | SHA-256 hash of content for conditional requests |
+| Last-Modified | Blob upload timestamp in UTC |
+| Content-Length | Size in bytes (compressed if gzip applied) |
+| Content-Encoding | `gzip` (when compression applied) |
 | Access-Control-Allow-Origin | `*` |
 
 #### Response Codes
@@ -192,11 +199,56 @@ Returns the Facebook catalog CSV file.
 | 404 | No catalog feed available - run a sync first |
 | 500 | Storage error - check Blob configuration |
 
+---
+
+**GET /api/feed/stats**
+
+Returns statistics about the current feed without serving the full content.
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "exists": true,
+    "productCount": 42,
+    "sizeBytes": 12345,
+    "uploadedAt": "2024-01-15T10:30:00.000Z",
+    "url": "https://..."
+  }
+}
+```
+
+---
+
+**GET /api/feed/validate**
+
+Validates the structure and format of the current feed.
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "valid": true,
+    "lineCount": 42,
+    "sizeBytes": 12345,
+    "uploadedAt": "2024-01-15T10:30:00.000Z",
+    "headers": "id,title,description,availability,condition,price,link,image_link,brand",
+    "expectedHeaders": "id,title,description,availability,condition,price,link,image_link,brand"
+  }
+}
+```
+
 ### Usage
 
 1. Run a manual sync via POST `/api/sync/manual` to generate the CSV
 2. Configure Facebook Business Manager to poll `GET /api/feed`
 3. Facebook will refresh the catalog based on the feed
+4. Use `/api/feed/stats` to monitor feed health
+5. Use `/api/feed/validate` to verify feed structure
 
 ### Environment Variables
 

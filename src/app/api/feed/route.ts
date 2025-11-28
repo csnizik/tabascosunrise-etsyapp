@@ -6,6 +6,9 @@
  * - Returns CSV with Content-Type: text/csv; charset=utf-8
  * - Cache-Control: public, max-age=3600 (1 hour)
  * - ETag support for conditional requests (304 Not Modified)
+ * - Last-Modified header for cache validation
+ * - Content-Length header for pre-allocation
+ * - Gzip compression for large payloads
  * - CORS headers for Facebook access
  * - Returns 404 if no CSV available
  * - Returns 500 if Blob fetch fails
@@ -16,9 +19,19 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
+import { gzip } from 'zlib';
+import { promisify } from 'util';
 import { getCSV } from '@/lib/storage/blob';
 import { logInfo, logError } from '@/lib/utils/logger';
 import { StorageError, toPublicError } from '@/lib/utils/errors';
+
+const gzipAsync = promisify(gzip);
+
+/**
+ * Minimum content size (in bytes) to enable gzip compression
+ * Only compress if content is larger than 1KB to avoid overhead
+ */
+const GZIP_THRESHOLD = 1024;
 
 /**
  * Common CORS headers for cross-origin access
@@ -54,7 +67,15 @@ export async function OPTIONS(): Promise<Response> {
  * Supports conditional requests via ETag/If-None-Match for efficient caching
  */
 export async function GET(request: NextRequest): Promise<Response> {
-  logInfo('Feed access requested');
+  const userAgent = request.headers.get('user-agent') || 'unknown';
+  const isFacebookBot = userAgent.includes('facebookexternalhit');
+  
+  logInfo('Feed access requested', {
+    userAgent,
+    referer: request.headers.get('referer'),
+    ip: request.headers.get('x-forwarded-for'),
+    isFacebookBot,
+  });
 
   try {
     // Fetch CSV from Blob storage
@@ -80,6 +101,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     // Generate ETag from content hash for conditional requests
     const etag = `"${createHash('sha256').update(result.content).digest('hex')}"`;
+    const lastModified = result.uploadedAt.toUTCString();
 
     // Check If-None-Match header for conditional request
     const requestEtag = request.headers.get('if-none-match');
@@ -89,27 +111,51 @@ export async function GET(request: NextRequest): Promise<Response> {
         status: 304,
         headers: {
           'ETag': etag,
+          'Last-Modified': lastModified,
           'Cache-Control': 'public, max-age=3600',
           ...corsHeaders,
         },
       });
     }
 
+    // Check Accept-Encoding for gzip support
+    const acceptEncoding = request.headers.get('accept-encoding') || '';
+    const supportsGzip = acceptEncoding.includes('gzip');
+    const shouldCompress = supportsGzip && result.content.length > GZIP_THRESHOLD;
+
+    // Prepare response body and headers
+    const responseHeaders: Record<string, string> = {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600',
+      'ETag': etag,
+      'Last-Modified': lastModified,
+      ...corsHeaders,
+    };
+
+    let responseBody: BodyInit;
+    if (shouldCompress) {
+      const compressed = await gzipAsync(Buffer.from(result.content));
+      responseBody = new Uint8Array(compressed);
+      responseHeaders['Content-Encoding'] = 'gzip';
+      responseHeaders['Content-Length'] = compressed.length.toString();
+    } else {
+      responseBody = result.content;
+      responseHeaders['Content-Length'] = Buffer.byteLength(result.content, 'utf-8').toString();
+    }
+
     logInfo('Feed served successfully', {
       size: result.content.length,
+      compressedSize: shouldCompress ? responseHeaders['Content-Length'] : undefined,
       uploadedAt: result.uploadedAt.toISOString(),
       etag,
+      isFacebookBot,
+      compressed: shouldCompress,
     });
 
-    // Return CSV with appropriate headers including ETag
-    return new Response(result.content, {
+    // Return CSV with appropriate headers
+    return new Response(responseBody, {
       status: 200,
-      headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Cache-Control': 'public, max-age=3600',
-        'ETag': etag,
-        ...corsHeaders,
-      },
+      headers: responseHeaders,
     });
   } catch (error) {
     logError('Feed access failed', {
