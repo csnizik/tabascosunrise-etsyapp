@@ -16,7 +16,6 @@
     "test:codegen": "playwright codegen http://localhost:3000"
   },
   "dependencies": {
-    "@playwright/test": "^1.57.0",
     "@vercel/blob": "^2.0.0",
     "@vercel/edge-config": "^1.4.3",
     "@vercel/postgres": "^0.10.0",
@@ -26,6 +25,7 @@
     "react-dom": "19.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
