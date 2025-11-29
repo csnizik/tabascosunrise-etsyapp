@@ -97,7 +97,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     logInfo('OAuth callback received', { hasCode: !!code, hasState: !!state });
 
     // Retrieve stored OAuth state data
-    const storedState = await getOAuthState(state);
+    const storedState = await getOAuthStateWithRetry(state)
 
     if (!storedState) {
       throw new OAuthError(
