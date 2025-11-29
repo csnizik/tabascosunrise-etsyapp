@@ -84,11 +84,16 @@ function formatDuration(ms: number): string {
 /**
  * Reconnect to Etsy button component
  */
-function ReconnectButton({ className = '' }: { className?: string }) {
+function ReconnectButton({ className = '', variant = 'primary' }: { className?: string; variant?: 'primary' | 'warning' }) {
+  const baseClasses = 'inline-flex items-center justify-center px-4 py-2 text-white font-medium rounded-lg transition-colors';
+  const variantClasses = variant === 'warning'
+    ? 'bg-yellow-600 hover:bg-yellow-700'
+    : 'bg-orange-600 hover:bg-orange-700';
+  
   return (
     <a
       href="/api/auth/etsy/authorize"
-      className={`inline-flex items-center justify-center px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition-colors ${className}`}
+      className={`${baseClasses} ${variantClasses} ${className}`}
     >
       Reconnect to Etsy
     </a>
@@ -491,12 +496,7 @@ export default function DashboardClient({
                   {feedback.text}
                 </p>
                 {feedback.isAuthError && (
-                  <a
-                    href="/api/auth/etsy/authorize"
-                    className="inline-flex items-center justify-center mt-3 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-medium rounded-lg transition-colors"
-                  >
-                    Reconnect to Etsy
-                  </a>
+                  <ReconnectButton className="mt-3" variant="warning" />
                 )}
               </div>
             </div>
