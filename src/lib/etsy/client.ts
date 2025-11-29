@@ -483,7 +483,7 @@ export class EtsyClient {
     logInfo('Fetching shop listings', { shopId: validatedShopId });
 
     while (hasMore) {
-      const endpoint = `/application/shops/${validatedShopId}/listings/active?limit=${DEFAULT_LIMIT}&offset=${offset}&includes=images`;
+      const endpoint = `/application/shops/${validatedShopId}/listings?limit=${DEFAULT_LIMIT}&offset=${offset}&includes=images`;
 
       const response = await this.makeRequest<EtsyListingsResponse>(endpoint);
 
@@ -513,6 +513,7 @@ export class EtsyClient {
       shopId: validatedShopId,
       totalListings: allListings.length,
     });
+    
 
     return allListings;
   }
