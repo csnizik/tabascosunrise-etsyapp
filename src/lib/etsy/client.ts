@@ -274,6 +274,24 @@ function validateShopId(shopId: string): string {
 }
 
 /**
+ * Validate and sanitize a shop name for use in API endpoints
+ * @param shopName - The shop name to validate
+ * @returns The validated and trimmed shop name
+ * @throws EtsyApiError if the shop name is invalid
+ */
+function validateShopName(shopName: string): string {
+  // Trim whitespace
+  const trimmed = shopName.trim();
+
+  // Check if empty
+  if (!trimmed) {
+    throw new EtsyApiError('Shop name cannot be empty', 'INVALID_SHOP_NAME', 400);
+  }
+
+  return trimmed;
+}
+
+/**
  * Etsy API Client with rate limiting and automatic token refresh
  * Provides methods for fetching shop listings and details
  *
@@ -528,41 +546,66 @@ export class EtsyClient {
   }
 
   /**
-   * Fetch the shop for a user
-   * Returns the first (primary) shop for the authenticated user
-   * Note: Etsy API returns an array of shops; this method returns the first one
+   * Fetch a shop by name
+   * Uses the findShops endpoint to search for a shop by exact name
    *
-   * @param userId - Etsy user ID
+   * @param shopName - Etsy shop name to search for
    * @returns Shop details object
-   * @throws EtsyApiError if user has no shops or on API errors
+   * @throws EtsyApiError if shop is not found or on API errors
    *
    * @example
    * const client = new EtsyClient();
-   * const shop = await client.getShopByUserId('12345');
-   * console.log(`Shop name: ${shop.shop_name}`);
+   * const shop = await client.getShopByName('TabascoSunrise');
+   * console.log(`Shop ID: ${shop.shop_id}`);
    */
-  async getShopByUserId(userId: string): Promise<EtsyShop> {
-    logInfo('Fetching shop by user ID', { userId });
+  async getShopByName(shopName: string): Promise<EtsyShop> {
+    logInfo('Fetching shop by name', { shopName });
 
-    const endpoint = `/application/users/${userId}/shops`;
-    const shops = await this.makeRequest<EtsyShopsResponse>(endpoint);
+    // Validate shop name
+    const trimmedShopName = validateShopName(shopName);
+    // Encode the shop name for URL safety
+    const encodedShopName = encodeURIComponent(trimmedShopName);
+    const endpoint = `/application/shops?shop_name=${encodedShopName}`;
+    const response = await this.makeRequest<EtsyShopsResponse>(endpoint);
 
-    // Etsy API returns an array of shops - get the first one
-    if (!Array.isArray(shops) || shops.length === 0) {
+    // Check if any shops were found
+    if (!response.results || response.results.length === 0) {
       throw new EtsyApiError(
-        `No shops found for user ${userId}`,
+        `No shop found with name "${shopName}"`,
         'NO_SHOPS_FOUND',
         404
       );
     }
 
-    const shop = shops[0];
+    /**
+     * The Etsy API's /application/shops?shop_name=... endpoint may return multiple shops
+     * with similar names, not just an exact match. To ensure we return the correct shop,
+     * we perform a case-insensitive exact match on shop_name. If no exact match is found,
+     * we throw an error. This avoids returning a shop with a similar but incorrect name.
+     */
+    const shop = response.results.find(
+      (s) => s.shop_name.toLowerCase() === shopName.toLowerCase()
+    );
 
-    logInfo('Shop fetched by user ID successfully', {
-      userId,
+    if (!shop) {
+      logError('No exact shop name match found', {
+        requestedName: shopName,
+        foundShops: response.results.map((s) => s.shop_name),
+      });
+      throw new EtsyApiError(
+        `No shop found with exact name "${shopName}". Found similar: ${response.results
+          .map((s) => s.shop_name)
+          .join(', ')}`,
+        'NO_EXACT_MATCH',
+        404
+      );
+    }
+
+    logInfo('Shop fetched by name successfully', {
+      shopName,
       shopId: shop.shop_id,
-      shopName: shop.shop_name,
-      totalShops: shops.length,
+      totalResults: response.count,
+      exactMatch: shop.shop_name === shopName,
     });
 
     return shop;
