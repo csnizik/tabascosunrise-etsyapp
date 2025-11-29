@@ -18,10 +18,11 @@ import { OAuthError, ConfigError, toPublicError } from '@/lib/utils/errors';
 import type { EtsyTokens } from '@/lib/etsy/types';
 
 /**
- * Maximum age for OAuth state (10 minutes)
+ * Maximum age for OAuth state (15 minutes)
  * States older than this are considered expired
+ * Set to 15 minutes to give users sufficient time to complete authorization
  */
-const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+const OAUTH_STATE_MAX_AGE_MS = 15 * 60 * 1000;
 
 /**
  * Token response from Etsy OAuth endpoint
@@ -92,6 +93,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     logInfo('State validated successfully', { stateAge: `${Math.round(stateAge / 1000)}s` });
 
+    // Delete state immediately after validation to prevent reuse
+    // Do this before token exchange to avoid race conditions with multiple OAuth attempts
+    await deleteOAuthState(state);
+    logInfo('OAuth state cleaned up after validation');
+
     // Validate required environment variables
     const clientId = process.env.ETSY_API_KEY;
     const redirectUri = process.env.ETSY_REDIRECT_URI;
@@ -134,9 +140,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       expiresAt,
       hasRefreshToken: !!tokenResponse.refresh_token,
     });
-
-    // Clean up OAuth state
-    await deleteOAuthState(state);
 
     logInfo('OAuth flow completed successfully');
 
