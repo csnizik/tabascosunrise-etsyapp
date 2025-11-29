@@ -55,6 +55,7 @@ export async function uploadCSV(
       access: 'public',
       addRandomSuffix: false,
       cacheControlMaxAge: 3600,
+      allowOverwrite: true,
     });
 
     logInfo('CSV uploaded successfully', {
