@@ -23,6 +23,7 @@ import {
   EtsyApiError,
   StorageError,
   RateLimitError,
+  ConfigError,
   AppError,
   toPublicError,
 } from '@/lib/utils/errors';
@@ -47,16 +48,23 @@ export async function POST(): Promise<NextResponse> {
     logInfo('Step 2: Fetching shop details');
     const client = new EtsyClient();
 
-    // Get shop using stored shop_id or look up by user_id
+    // Get shop using stored shop_id or look up by shop name
     let shop;
     if (tokens.shop_id) {
       logInfo('Using stored shop_id', { shopId: tokens.shop_id });
       shop = await client.getShopDetails(tokens.shop_id);
     } else {
-      logInfo('No shop_id stored, fetching shop by user_id', {
-        userId: tokens.user_id,
+      const shopName = process.env.ETSY_SHOP_NAME;
+      if (!shopName) {
+        logError('ETSY_SHOP_NAME environment variable is not set');
+        throw new ConfigError(
+          'ETSY_SHOP_NAME environment variable is required when shop_id is not stored'
+        );
+      }
+      logInfo('No shop_id stored, fetching shop by name', {
+        shopName,
       });
-      shop = await client.getShopByUserId(tokens.user_id);
+      shop = await client.getShopByName(shopName);
     }
 
     logInfo('Shop details fetched', {
@@ -147,6 +155,8 @@ export async function POST(): Promise<NextResponse> {
       statusCode = error.statusCode || 502;
     } else if (error instanceof StorageError) {
       statusCode = 503;
+    } else if (error instanceof ConfigError) {
+      statusCode = 500;
     }
 
     const publicError = toPublicError(error);
