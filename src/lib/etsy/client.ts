@@ -513,20 +513,7 @@ export class EtsyClient {
       shopId: validatedShopId,
       totalListings: allListings.length,
     });
-
-    // Adding logging to check for additional images
-    console.log('Checking allListings for additional images', {
-      listing_id: allListings[0]?.listing_id,
-      has_images: !!allListings[0]?.images,
-      title: allListings[0]?.title,
-      description: allListings[0]?.description,
-      image_count: allListings[0]?.images?.length || 0,
-      first_image_url: allListings[0]?.images?.[0]?.url_fullxfull || 'none',
-      is_placeholder: allListings[0]?.images?.[0]?.url_fullxfull?.includes('placeholder') || false,
-      is_etsy_cdn: allListings[0]?.images?.[0]?.url_fullxfull?.includes('etsystatic.com') || false,
-      all_image_urls: allListings[0]?.images?.map(img => img.url_fullxfull) || []
-    }
-    )
+    
 
     return allListings;
   }
