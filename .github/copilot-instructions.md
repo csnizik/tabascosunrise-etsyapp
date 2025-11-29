@@ -2,87 +2,73 @@
 
 ## Project Overview
 
-Building an automated Etsy-to-Facebook catalog sync system using Next.js 14+ (App Router), TypeScript, Vercel Edge Config, and Vercel Blob storage.
+Automated Etsy-to-Facebook catalog sync system using Next.js 14+ (App Router), TypeScript, Vercel Edge Config, and Vercel Blob storage. Single-shop owner application (not multi-tenant SaaS).
 
 ## Tech Stack
 
-- **Framework**: Next.js 14+ with App Router, TypeScript
+- **Framework**: Next.js 14+ with App Router, TypeScript strict mode
 - **Storage**: Vercel Edge Config (tokens), Vercel Blob (CSV feeds)
-- **Styling**: Tailwind CSS
+- **Styling**: Tailwind CSS (no CSS modules)
 - **API**: Etsy Open API v3 (OAuth 2.0)
+- **Testing**: Playwright for e2e validation
 - **Deployment**: Vercel with Cron Jobs
 
-## Code Style Preferences
+## Code Style Standards
 
-- Use TypeScript strict mode
-- Prefer async/await over promises
-- Use descriptive variable names
-- Add JSDoc comments for complex functions
-- Use Next.js App Router conventions (not Pages Router)
-- Keep components small and focused
-- Use Tailwind for all styling (no CSS modules)
+- TypeScript strict mode, async/await over promises
+- Descriptive variable names, JSDoc for complex functions
+- Next.js App Router conventions only
+- Small, focused components
+- Tailwind for all styling
 
 ## Project Structure
-
 ```
 src/
 ├── app/
 │   ├── api/
-│   │   ├── auth/etsy/
-│   │   │   ├── callback/route.ts    # OAuth callback handler
-│   │   │   └── authorize/route.ts   # Initiate OAuth flow
-│   │   ├── sync/
-│   │   │   ├── manual/route.ts      # Manual sync trigger
-│   │   │   └── cron/route.ts        # Automated cron sync
-│   │   └── feed/route.ts            # Serve CSV feed to Facebook
-│   ├── dashboard/
-│   │   └── page.tsx                 # Dashboard UI
-│   └── page.tsx                     # Landing/auth page
+│   │   ├── auth/etsy/{authorize,callback}/route.ts
+│   │   ├── sync/{manual,cron}/route.ts
+│   │   └── feed/route.ts
+│   ├── dashboard/page.tsx
+│   └── page.tsx
 ├── lib/
-│   ├── etsy/
-│   │   ├── client.ts               # Etsy API client
-│   │   ├── oauth.ts                # OAuth helper functions
-│   │   └── types.ts                # Etsy API type definitions
-│   ├── facebook/
-│   │   ├── catalog.ts              # Catalog formatter
-│   │   └── types.ts                # Facebook catalog types
-│   ├── storage/
-│   │   ├── edge-config.ts          # Token storage operations
-│   │   └── blob.ts                 # CSV feed storage
-│   └── utils/
-│       ├── logger.ts               # Logging utility
-│       └── errors.ts               # Error handling
-└── types/
-    └── index.ts                    # Shared type definitions
+│   ├── etsy/{client,oauth,types}.ts
+│   ├── facebook/{catalog,types}.ts
+│   ├── storage/{edge-config,blob}.ts
+│   └── utils/{logger,errors}.ts
+└── types/index.ts
 ```
 
-## Key Implementation Requirements
+## Critical Requirements
 
-### 1. OAuth Flow (PKCE)
+### OAuth Implementation (PKCE Required)
 
-- Generate code_verifier and code_challenge using crypto
-- Store state and code_verifier in Edge Config during flow
-- Exchange authorization code for access_token and refresh_token
-- Store tokens securely in Edge Config
-- Access token expires in 1 hour, refresh token in 90 days
+- Generate code_verifier (128 chars), code_challenge (SHA256 base64url)
+- Store state + code_verifier in Edge Config with 15-minute TTL
+- Delete state immediately after validation in callback
+- Handle Edge Config propagation delay (wait 1 second after write)
+- Token format: `${userId}.${accessToken}`
 
-### 2. Token Management
+### Token Management
 
-- Check token expiry before each API call
-- Auto-refresh tokens when needed
-- Handle refresh token expiration gracefully
-- Edge Config keys: `etsy_access_token`, `etsy_refresh_token`, `etsy_token_expiry`
+- Check expiry 5 minutes early to avoid race conditions
+- Auto-refresh before each API call
+- Store: `{ access_token, refresh_token, expires_at: ISO string, user_id }`
+- Access token: 1 hour, Refresh token: 90 days
 
-### 3. Etsy API Integration
+### Etsy API Endpoints
 
-Required endpoints:
+**Get shop by name** (not user_id):
+```
+GET /v3/application/shops?shop_name=TabascoSunrise
+```
 
-- GET `/v3/application/shops/{shop_id}/listings/active` - Fetch active listings
-- GET `/v3/application/shops/{shop_id}` - Get shop details
-- POST `/v3/public/oauth/token` - Get/refresh tokens
+**Get listings:**
+```
+GET /v3/application/shops/{shop_id}/listings/active
+```
 
-Headers required:
-
+**Headers:**
 ```typescript
 {
   'x-api-key': process.env.ETSY_API_KEY,
@@ -90,252 +76,230 @@ Headers required:
 }
 ```
 
-### 4. Facebook Catalog CSV Format
+**Rate Limits:** 5 QPS, 5000 QPD - implement token bucket algorithm
 
-Required fields (CSV headers):
-- id (listing_id)
-- title (listing title)
-- description (listing description)
-- availability (in stock / out of stock)
-- condition (new)
-- price (format: "19.99 USD")
-- link (Etsy listing URL)
-- image_link (primary image URL)
-- brand (shop name: "TabascoSunrise")
+### Facebook Catalog CSV
 
-### 5. Error Handling
-- Wrap all external API calls in try-catch
-- Log errors with context
-- Return appropriate HTTP status codes
-- Never expose secrets in error messages
-- Handle rate limits (5 QPS, 5000 QPD)
+**Required fields (exact format):**
+- id, title, description, availability, condition, price, link, image_link, brand
+- Price: `"12.99 USD"` (convert from Etsy's `{amount: 1299, divisor: 100}`)
+- Availability: Always `"in stock"` (digital products)
+- Condition: Always `"new"`
+- Brand: `"TabascoSunrise"`
+- Escape quotes, commas, newlines in CSV
 
-### 6. Security
+### Error Handling
 
-- Validate CRON_SECRET for cron endpoints
-- Never commit .env.local
-- Sanitize all user inputs
-- Use PKCE for OAuth (not just state)
-- Store tokens encrypted in Edge Config
+- Wrap all external calls in try-catch with context logging
+- Return appropriate HTTP status codes (401, 403, 500)
+- Never expose secrets in errors
+- Implement exponential backoff for 429/5xx errors
+- Log: timestamp, endpoint, error message, context
 
-## Environment Variables Reference
+### Security
 
+- Validate `CRON_SECRET` for cron endpoints
+- Never commit `.env.local`
+- Sanitize user inputs
+- Use PKCE + state for OAuth
+- Use Vercel API token for Edge Config writes (not connection string token)
+
+## Definition of Done (DoD)
+
+**Every task MUST meet ALL criteria before marking complete:**
+
+### 1. Code Quality
+
+- [ ] TypeScript compiles with no errors (`npm run build`)
+- [ ] ESLint passes with no warnings
+- [ ] Code follows project style standards
+- [ ] JSDoc comments on complex functions
+- [ ] No hardcoded secrets or sensitive data
+
+### 2. Functionality
+
+- [ ] Feature works as described in acceptance criteria
+- [ ] All edge cases handled (empty data, errors, missing fields)
+- [ ] Error messages are clear and actionable
+- [ ] Logging implemented for debugging
+
+### 3. Testing (MANDATORY)
+
+**For API Routes:**
+- [ ] Unit tests for core logic functions
+- [ ] Integration test mocking external APIs
+- [ ] Error scenario tests (401, 403, 429, 500, network timeout)
+
+**For UI Components:**
+- [ ] Playwright e2e test covering happy path
+- [ ] Screenshots captured showing:
+  - Initial state
+  - Loading state
+  - Success state
+  - Error state
+- [ ] Test runs in CI environment successfully
+
+**For Full Features:**
+- [ ] Complete user flow tested end-to-end
+- [ ] Screenshots prove feature works in browser
+- [ ] Manual testing checklist completed
+
+### 4. Documentation
+
+- [ ] README updated if user-facing changes
+- [ ] Environment variables documented
+- [ ] API endpoints documented (if new)
+- [ ] Known limitations noted
+
+### 5. Deployment Readiness
+
+- [ ] Works in production environment (not just localhost)
+- [ ] Environment variables configured correctly
+- [ ] No console errors in browser/logs
+- [ ] Tested with real Etsy/Vercel APIs (not just mocks)
+
+### 6. Pull Request Requirements
+
+- [ ] PR description explains what/why
+- [ ] Screenshots included for UI changes
+- [ ] Test results included (pass/fail)
+- [ ] Breaking changes clearly called out
+- [ ] Closes relevant issue with `Closes #XX`
+
+## Testing Requirements
+
+### Playwright Setup
+
+Create `tests/e2e/{feature}.spec.ts` for each user-facing feature:
+```typescript
+import { test, expect } from '@playwright/test';
+
+test('OAuth flow completes successfully', async ({ page }) => {
+  await page.goto('http://localhost:3000');
+  await page.click('text=Connect to Etsy');
+
+  // Take screenshot at each step
+  await page.screenshot({ path: 'tests/screenshots/oauth-start.png' });
+
+  // Continue test...
+  await expect(page.locator('text=Connected')).toBeVisible();
+  await page.screenshot({ path: 'tests/screenshots/oauth-success.png' });
+});
 ```
-ETSY_API_KEY - From Etsy Developer Portal
-ETSY_SHARED_SECRET - From Etsy Developer Portal
-ETSY_REDIRECT_URI - OAuth callback URL
-ETSY_SCOPES - OAuth scopes (listings_r shops_r)
-EDGE_CONFIG - Auto-set by Vercel
-BLOB_READ_WRITE_TOKEN - Auto-set by Vercel
-CRON_SECRET - Random secret for cron auth
+
+### Required Test Coverage
+
+- **OAuth flow**: Start → Etsy consent → Callback → Dashboard
+- **Manual sync**: Click button → Loading → Success/Error
+- **Feed URL**: Copy button → Clipboard check
+- **Error states**: Expired auth, API failures, network errors
+
+### Screenshot Requirements
+
+Each test MUST capture:
+1. Initial state (before action)
+2. Loading/processing state
+3. Success state (with visible confirmation)
+4. Error state (with clear error message)
+
+Save to: `tests/screenshots/{feature}-{state}.png`
+
+## Environment Variables
+```env
+# Etsy (from Developer Portal)
+ETSY_API_KEY=x9asgw4xr1qujte68pus54al
+ETSY_SHARED_SECRET=j56ebg2tbr
+ETSY_REDIRECT_URI=http://localhost:3000/api/auth/etsy/callback
+ETSY_SCOPES=listings_r shops_r
+
+# Vercel (auto-set when connected)
+EDGE_CONFIG=https://edge-config.vercel.com/ecfg_xxx?token=xxx
+EDGE_CONFIG_ID=ecfg_xxx
+EDGE_CONFIG_TOKEN=vercel_token_xxx (Vercel API token, not connection string token)
+BLOB_READ_WRITE_TOKEN=vercel_blob_xxx
+
+# Security
+CRON_SECRET=<generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))">
 ```
 
 ## Common Patterns
 
-### Etsy API Call with Auto-Refresh
-
+### Etsy API with Auto-Refresh
 ```typescript
 async function fetchWithRefresh(endpoint: string) {
-  const token = await getValidToken(); // Checks expiry, refreshes if needed
+  const token = await getValidToken(); // Auto-refreshes if needed
   const response = await fetch(`https://api.etsy.com/v3${endpoint}`, {
     headers: {
       'x-api-key': process.env.ETSY_API_KEY!,
       'Authorization': `Bearer ${token.userId}.${token.accessToken}`
     }
   });
+
+  if (!response.ok) {
+    throw new EtsyApiError(response.status, await response.text());
+  }
+
   return response.json();
 }
 ```
 
-### Edge Config Token Operations
-
+### Edge Config Operations
 ```typescript
-import { get, set } from '@vercel/edge-config';
+import { patch } from '@vercel/edge-config';
 
-// Store token
-await set('etsy_tokens', {
-  access_token,
-  refresh_token,
-  expires_at: new Date(Date.now() + 3600000).toISOString()
-});
+// Write (using Vercel API token)
+await patch(process.env.EDGE_CONFIG_ID!, [
+  { operation: 'upsert', key: 'etsy_tokens', value: tokens }
+]);
 
-// Retrieve token
+// Wait for propagation
+await new Promise(resolve => setTimeout(resolve, 1000));
+
+// Read
+import { get } from '@vercel/edge-config';
 const tokens = await get('etsy_tokens');
 ```
 
-## Testing Locally
+## Known Issues & Workarounds
 
-- Use `http://localhost:3000` for redirect URI during dev
-- Update Etsy app settings to include localhost callback
-- Run: `npm run dev`
-- Test OAuth: Visit `/api/auth/etsy/authorize`
+1. **Edge Config write tokens**: Use Vercel API token (starts with `vercel_token_`), not connection string token
+2. **OAuth state expiry**: 15-minute TTL, cleanup after use
+3. **Etsy API endpoint**: Use `/shops?shop_name=TabascoSunrise`, not `/users/{id}/shops`
+4. **Rate limiting**: Implement before hitting limits (5 QPS, 5K QPD)
 
-## Deployment Checklist
+## Issue Sizing Guide
 
-1. Create Edge Config in Vercel Dashboard
-2. Connect Edge Config to project
-3. Create Blob store in Vercel Dashboard
-4. Update ETSY_REDIRECT_URI to production URL
-5. Update Etsy app callback URL to production
-6. Set up Vercel Cron Job for `/api/sync/cron`
-7. Test manual sync via dashboard
+- **XS (1-2h)**: Single file, no dependencies, minimal testing
+- **S (2-4h)**: 2-3 files, clear requirements, standard testing
+- **M (4-8h)**: Multiple files, some investigation, comprehensive testing
+- **L (8-16h)**: Major feature, multiple dependencies, extensive testing
+- **XL (16+h)**: Break into smaller issues
 
-## Current Status
+**Rule**: If sizing XL, split into multiple M/L issues.
 
-- [x] Project initialized
-- [x] Dependencies installed
-- [ ] OAuth flow implementation
-- [ ] Token management in Edge Config
-- [ ] Etsy API client
-- [ ] Facebook catalog formatter
-- [ ] CSV generation and Blob storage
-- [ ] Dashboard UI
-- [ ] Cron job setup
+## Pre-Flight Checklist (Before Starting Work)
 
-## Issue Sizing Guidelines
+- [ ] Read issue acceptance criteria completely
+- [ ] Understand DoD requirements
+- [ ] Identify test scenarios needed
+- [ ] Plan screenshot capture points
+- [ ] Check for dependencies on other issues
+- [ ] Review related code in codebase
 
-Use t-shirt sizing for all issues based on these criteria:
+## Validation Checklist (Before Requesting Review)
 
-### XS (Extra Small) - 1-2 hours
+- [ ] All DoD items checked
+- [ ] Playwright tests written and passing
+- [ ] Screenshots captured and included in PR
+- [ ] Manual testing completed
+- [ ] No console errors
+- [ ] Tested in production-like environment
+- [ ] PR description complete with test results
 
-**Characteristics:**
-- Single file change or creation
-- Well-defined with clear acceptance criteria
-- No dependencies on other tasks
-- Minimal testing required
-- Low complexity, straightforward implementation
+## Notes
 
-**Examples:**
-- Add a simple utility function
-- Update environment variable
-- Add TypeScript interface
-- Create a basic UI component with existing patterns
-- Fix typo or update documentation
-
-### S (Small) - 2-4 hours
-**Characteristics:**
-- 2-3 related files
-- Clear requirements with minimal ambiguity
-- May have 1-2 minor dependencies
-- Standard testing needed
-- Moderate complexity
-
-**Examples:**
-- Implement a single API route
-- Create a form with validation
-- Add logging to existing service
-- Build a simple data transformer
-- Wire up existing components
-
-### M (Medium) - 4-8 hours (1 day)
-
-**Characteristics:**
-- Multiple files across 2-3 directories
-- Requires some investigation or design decisions
-- Has several dependencies
-- Comprehensive testing needed
-- Moderate to high complexity
-
-**Examples:**
-- Complete OAuth callback flow
-- Build a dashboard page with multiple features
-- Implement token refresh logic
-- Create CSV generator with validation
-- Full CRUD operations for a resource
-
-### L (Large) - 8-16 hours (2 days)
-
-**Characteristics:**
-- Major feature spanning multiple directories
-- Requires design discussion or research
-- Multiple dependencies and integration points
-- Extensive testing and edge cases
-- High complexity or unfamiliar territory
-
-**Examples:**
-- Complete OAuth flow (authorize + callback + storage)
-- Full Etsy API client with error handling
-- End-to-end sync service
-- Dashboard with real-time status updates
-- Complex state management implementation
-
-### XL (Extra Large) - 16+ hours (3+ days)
-
-**Characteristics:**
-- Epic-level feature or major refactor
-- Multiple sub-tasks that could be separate issues
-- Significant architectural decisions
-- Cross-cutting concerns affecting many files
-- Should likely be broken down into smaller issues
-
-**Examples:**
-- Complete MVP from scratch
-- Major architecture refactor
-- Multiple related features as one unit
-- Full integration with external service (all endpoints)
-- Performance optimization across entire app
-
-**NOTE:** If you're sizing something as XL, strongly consider breaking it into multiple L or M issues instead.
-
-### Sizing Decision Tree
-
-1. **How many files?**
-   - 1 file → XS or S
-   - 2-3 files → S or M
-   - 4-6 files → M or L
-   - 7+ files → L or XL
-
-2. **How familiar is the pattern?**
-   - Copy existing pattern → -1 size
-   - New pattern, clear docs → Same size
-   - Unfamiliar, needs research → +1 size
-
-3. **How many dependencies?**
-   - None → -1 size
-   - 1-2 → Same size
-   - 3+ → +1 size
-
-4. **Testing complexity?**
-   - Simple unit test → Same size
-   - Integration test needed → +1 size
-   - Multiple test scenarios → +1 size
-
-5. **Risk level?**
-   - Low (easy rollback) → Same size
-   - Medium (affects other features) → +1 size
-   - High (critical path) → +1 size
-
-### Examples from This Project
-
-**XS Issues:**
-- Add EtsyListing type definition
-- Create logger utility
-- Add environment variable
-
-**S Issues:**
-- Implement PKCE helper functions
-- Create authorize route
-- Build basic dashboard layout
-
-**M Issues:**
-- Complete OAuth callback with token storage
-- Implement token refresh logic
-- Build Facebook CSV formatter
-- Create manual sync API endpoint
-
-**L Issues:**
-- Full OAuth flow (authorize + callback + storage + error handling)
-- Etsy API client with rate limiting and retries
-- Dashboard with status, manual trigger, and error display
-
-**XL Issues:**
-- Complete end-to-end sync pipeline
-- Full MVP from current state
-
-## Notes for Copilot
-
-- This is for a single shop owner (me), not a multi-tenant SaaS
-- No database needed - Edge Config is sufficient
-- Focus on reliability over features
-- Digital products (PDFs) - no inventory tracking needed
-- Rate limit: 5 requests/sec, 5000/day - be conservative
+- Single shop owner app (not multi-tenant)
+- Digital products only (no inventory tracking)
+- Reliability > Features
+- Conservative rate limiting
+- Edge Config sufficient (no database needed)

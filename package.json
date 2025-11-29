@@ -2,13 +2,21 @@
   "name": "tabascosunrise-etsyapp",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
+ "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "next lint",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:headed": "playwright test --headed",
+    "test:chromium": "playwright test --project=chromium",
+    "test:report": "playwright show-report",
+    "test:codegen": "playwright codegen http://localhost:3000"
   },
   "dependencies": {
+    "@playwright/test": "^1.57.0",
     "@vercel/blob": "^2.0.0",
     "@vercel/edge-config": "^1.4.3",
     "@vercel/postgres": "^0.10.0",
