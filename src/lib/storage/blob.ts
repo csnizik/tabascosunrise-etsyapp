@@ -54,6 +54,7 @@ export async function uploadCSV(
       contentType: 'text/csv; charset=utf-8',
       access: 'public',
       addRandomSuffix: false,
+      cacheControlMaxAge: 3600,
     });
 
     logInfo('CSV uploaded successfully', {
