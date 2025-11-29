@@ -50,10 +50,13 @@ export async function uploadCSV(
   try {
     // Upload to Blob storage with public access
     // Using 'addRandomSuffix: false' to keep a consistent URL
+    // allowOverwrite: true to replace existing file, the behavior needed for a single updated catalog
     const blob = await put(filename, csvContent, {
       contentType: 'text/csv; charset=utf-8',
       access: 'public',
       addRandomSuffix: false,
+      cacheControlMaxAge: 3600,
+      allowOverwrite: true,
     });
 
     logInfo('CSV uploaded successfully', {
