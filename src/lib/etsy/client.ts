@@ -351,7 +351,7 @@ export class EtsyClient {
           method: 'GET',
           headers: {
             'x-api-key': this.apiKey,
-            Authorization: `Bearer ${tokens.user_id}.${tokens.access_token}`,
+            Authorization: `Bearer ${tokens.access_token}`,
           },
         });
 

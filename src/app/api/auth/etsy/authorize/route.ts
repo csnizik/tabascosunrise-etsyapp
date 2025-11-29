@@ -62,6 +62,10 @@ export async function GET(): Promise<NextResponse> {
 
     await storeOAuthState(state, stateData);
 
+    await new Promise(resolve => setTimeout(resolve, 1000)); // slight delay to ensure storage completes
+    logInfo('Waited for Edge Config propagation');
+
+    
     // Build authorization URL
     const authUrl = buildAuthorizationUrl(
       { clientId, redirectUri, scopes },
@@ -72,8 +76,8 @@ export async function GET(): Promise<NextResponse> {
     // Log with redacted client_id using URLSearchParams for safe parsing
     const redactedUrl = new URL(authUrl);
     redactedUrl.searchParams.set('client_id', '***');
-    logInfo('Redirecting to Etsy authorization page', { 
-      authUrl: redactedUrl.toString() 
+    logInfo('Redirecting to Etsy authorization page', {
+      authUrl: redactedUrl.toString()
     });
 
     // Redirect user to Etsy consent page
@@ -86,7 +90,7 @@ export async function GET(): Promise<NextResponse> {
 
     // Return error response
     const publicError = toPublicError(error);
-    const statusCode = error instanceof ConfigError ? 500 : 
+    const statusCode = error instanceof ConfigError ? 500 :
                        error instanceof StorageError ? 503 : 500;
 
     return NextResponse.json(

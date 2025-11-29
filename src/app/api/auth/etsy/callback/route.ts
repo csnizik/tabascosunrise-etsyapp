@@ -16,12 +16,41 @@ import { getOAuthState, deleteOAuthState, storeEtsyTokens } from '@/lib/storage/
 import { logInfo, logError } from '@/lib/utils/logger';
 import { OAuthError, ConfigError, toPublicError } from '@/lib/utils/errors';
 import type { EtsyTokens } from '@/lib/etsy/types';
+import type { OAuthStateData } from '@/lib/etsy/oauth'
+
 
 /**
- * Maximum age for OAuth state (10 minutes)
+ * Retry reading OAuth state with exponential backoff
+ * Edge Config writes may take time to propagate
+ */
+async function getOAuthStateWithRetry(
+  state: string,
+  maxAttempts: number = 3,
+  initialDelayMs: number = 1000
+): Promise<OAuthStateData | null> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const storedState = await getOAuthState(state);
+
+    if (storedState) {
+      logInfo('State retrieved successfully', { attempt });
+      return storedState;
+    }
+
+    if (attempt < maxAttempts) {
+      const delayMs = initialDelayMs * Math.pow(2, attempt - 1);
+      logInfo('State not found, retrying...', { attempt, delayMs });
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Maximum age for OAuth state (15 minutes)
  * States older than this are considered expired
  */
-const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+const OAUTH_STATE_MAX_AGE_MS = 15 * 60 * 1000;
 
 /**
  * Token response from Etsy OAuth endpoint
@@ -70,7 +99,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     logInfo('OAuth callback received', { hasCode: !!code, hasState: !!state });
 
     // Retrieve stored OAuth state data
-    const storedState = await getOAuthState(state);
+    const storedState = await getOAuthStateWithRetry(state)
 
     if (!storedState) {
       throw new OAuthError(
