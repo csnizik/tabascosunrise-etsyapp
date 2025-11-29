@@ -16,6 +16,12 @@ const MAX_DESCRIPTION_LENGTH = 5000;
 /** Placeholder image URL when listing has no images */
 const PLACEHOLDER_IMAGE_URL = 'https://via.placeholder.com/800x800?text=No+Image';
 
+/**
+ * Maximum number of images to include per listing
+ * Facebook catalog supports up to 20 images, but we limit to 9 (1 main + 8 additional)
+ */
+const MAX_IMAGES_PER_LISTING = 9;
+
 /** CSV column headers in the order required by Facebook */
 const CSV_HEADERS = [
   'id',
@@ -159,7 +165,7 @@ export function getAdditionalImageUrls(
   if (listingImages) {
     const images = listingImages.get(listing.listing_id);
     if (images && images.length > 1) {
-      // Images already sorted and limited to 9, skip first (main image)
+      // Images already sorted and limited, skip first (main image)
       return images
         .slice(1)
         .map((img) => img.url_fullxfull)
@@ -171,7 +177,7 @@ export function getAdditionalImageUrls(
   if (listing.images && listing.images.length > 1) {
     const sortedImages = [...listing.images]
       .sort((a, b) => a.rank - b.rank)
-      .slice(0, 9);
+      .slice(0, MAX_IMAGES_PER_LISTING);
 
     return sortedImages
       .slice(1) // Skip rank 1 (main image)

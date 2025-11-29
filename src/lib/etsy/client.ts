@@ -61,6 +61,18 @@ const ETSY_API_BASE = 'https://api.etsy.com/v3';
 const DEFAULT_LIMIT = 100;
 
 /**
+ * Maximum number of listing IDs that can be fetched in a single batch request
+ * This is an Etsy API limit for the listings/batch endpoint
+ */
+const BATCH_SIZE = 100;
+
+/**
+ * Maximum number of images to include per listing
+ * Facebook catalog supports up to 20 images, but we limit to 9 (1 main + 8 additional)
+ */
+const MAX_IMAGES_PER_LISTING = 9;
+
+/**
  * Gets a valid Etsy access token, refreshing if necessary
  * This function ensures that API calls always have a valid token by:
  * 1. Retrieving stored tokens from Edge Config
@@ -569,16 +581,16 @@ export class EtsyClient {
 
     logInfo('Fetching images for listings', {
       totalListings: listingIds.length,
-      batches: Math.ceil(listingIds.length / 100),
+      batches: Math.ceil(listingIds.length / BATCH_SIZE),
     });
 
-    // Batch into groups of 100 (Etsy API limit)
-    for (let i = 0; i < listingIds.length; i += 100) {
-      const batch = listingIds.slice(i, i + 100);
+    // Batch into groups based on Etsy API limit
+    for (let i = 0; i < listingIds.length; i += BATCH_SIZE) {
+      const batch = listingIds.slice(i, i + BATCH_SIZE);
       const listingIdsParam = batch.join(',');
 
       logInfo('Fetching image batch', {
-        batchNumber: Math.floor(i / 100) + 1,
+        batchNumber: Math.floor(i / BATCH_SIZE) + 1,
         batchSize: batch.length,
       });
 
@@ -601,16 +613,16 @@ export class EtsyClient {
         // Build Map for efficient lookup
         response.results.forEach((listing) => {
           if (listing.images && listing.images.length > 0) {
-            // Sort by rank and limit to first 9 images
+            // Sort by rank and limit to max images per listing
             const sortedImages = listing.images
               .sort((a, b) => a.rank - b.rank)
-              .slice(0, 9);
+              .slice(0, MAX_IMAGES_PER_LISTING);
             imagesByListingId.set(listing.listing_id, sortedImages);
           }
         });
       } catch (error) {
         logError('Failed to fetch image batch', {
-          batchNumber: Math.floor(i / 100) + 1,
+          batchNumber: Math.floor(i / BATCH_SIZE) + 1,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
         throw error;
