@@ -15,6 +15,7 @@ import type { StatusResponse } from '@/app/api/status/route';
 interface FeedbackMessage {
   type: 'success' | 'error' | 'info';
   text: string;
+  isAuthError?: boolean;
 }
 
 /**
@@ -24,6 +25,14 @@ interface DashboardClientProps {
   authStatus?: string;
   errorCode?: string;
   errorMessage?: string;
+}
+
+/**
+ * Check if an error message indicates an authentication issue
+ */
+function isAuthRelatedError(message: string): boolean {
+  const lowerMessage = message.toLowerCase();
+  return lowerMessage.includes('token') || lowerMessage.includes('auth');
 }
 
 /**
@@ -37,10 +46,11 @@ function getActionableError(error: unknown): FeedbackMessage {
         text: 'Rate limit exceeded. Please wait a few minutes and try again.',
       };
     }
-    if (error.message.toLowerCase().includes('token') || error.message.toLowerCase().includes('auth')) {
+    if (isAuthRelatedError(error.message)) {
       return {
         type: 'error',
         text: 'Authentication expired. Please reconnect to Etsy.',
+        isAuthError: true,
       };
     }
     if (error.message.toLowerCase().includes('network') || error.message.toLowerCase().includes('fetch')) {
@@ -69,6 +79,20 @@ function formatDuration(ms: number): string {
   }
   const seconds = Math.round(ms / 100) / 10;
   return `${seconds}s`;
+}
+
+/**
+ * Reconnect to Etsy button component
+ */
+function ReconnectButton({ className = '' }: { className?: string }) {
+  return (
+    <a
+      href="/api/auth/etsy/authorize"
+      className={`inline-flex items-center justify-center px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition-colors ${className}`}
+    >
+      Reconnect to Etsy
+    </a>
+  );
 }
 
 /**
@@ -419,6 +443,7 @@ export default function DashboardClient({
                 Error code: {errorCode}
               </p>
             )}
+            <ReconnectButton className="mt-3 ml-7" />
           </div>
         )}
 
@@ -444,6 +469,7 @@ export default function DashboardClient({
             >
               {feedback.text}
             </p>
+            {feedback.isAuthError && <ReconnectButton className="mt-3" />}
           </div>
         )}
 
