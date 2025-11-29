@@ -26,6 +26,7 @@ const CSV_HEADERS = [
   'price',
   'link',
   'image_link',
+  'additional_image_link',
   'brand',
 ] as const;
 
@@ -114,15 +115,43 @@ export function escapeCSV(value: string): string {
 /**
  * Gets the primary image URL from an Etsy listing
  * Returns placeholder if no images available or if URL is missing
+ * Images are sorted by rank before selection
  * @param listing - Etsy listing object
  * @returns Image URL string
  */
 export function getPrimaryImageUrl(listing: EtsyListing): string {
-  if (listing.images && listing.images.length > 0 && listing.images[0].url_fullxfull) {
-    // Use the full resolution image URL
-    return listing.images[0].url_fullxfull;
+  if (listing.images && listing.images.length > 0) {
+    // Sort images by rank to ensure we get the primary image (rank 1)
+    const sortedImages = [...listing.images].sort((a, b) => a.rank - b.rank);
+    if (sortedImages[0].url_fullxfull) {
+      return sortedImages[0].url_fullxfull;
+    }
   }
   return PLACEHOLDER_IMAGE_URL;
+}
+
+/**
+ * Gets additional image URLs (images 2-9) from an Etsy listing
+ * Returns comma-separated URLs for Facebook catalog additional_image_link field
+ * Limited to 8 additional images (ranks 2-9)
+ * @param listing - Etsy listing object
+ * @returns Comma-separated image URLs string, empty string if no additional images
+ */
+export function getAdditionalImageUrls(listing: EtsyListing): string {
+  if (!listing.images || listing.images.length <= 1) {
+    return '';
+  }
+
+  // Sort images by rank and take images 2-9 (up to 8 additional)
+  const sortedImages = [...listing.images].sort((a, b) => a.rank - b.rank);
+  const additionalImages = sortedImages.slice(1, 9);
+
+  // Filter for valid URLs and join with commas
+  const urls = additionalImages
+    .map((img) => img.url_fullxfull)
+    .filter((url) => url && url.trim() !== '');
+
+  return urls.join(',');
 }
 
 /**
@@ -180,6 +209,7 @@ export function formatListing(listing: EtsyListing, shopName: string): FacebookP
     price: formatPrice(listing.price),
     link: listing.url,
     image_link: getPrimaryImageUrl(listing),
+    additional_image_link: getAdditionalImageUrls(listing),
     brand: shopName,
   };
 }
