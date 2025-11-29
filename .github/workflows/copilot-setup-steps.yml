@@ -9,7 +9,7 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  validate:
+  copilot-setup-steps:
     name: Validate Code Quality
     runs-on: ubuntu-latest
     timeout-minutes: 8
@@ -82,8 +82,7 @@ jobs:
           fi
 
       - name: Security audit
-        run: |
-          npm audit --audit-level=high || echo "WARNING: Vulnerabilities found"
+        run: npm audit --audit-level=high || echo "WARNING: Vulnerabilities found"
         continue-on-error: true
 
       # ================================================================
