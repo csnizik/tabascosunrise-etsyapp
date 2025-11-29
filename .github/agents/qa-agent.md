@@ -1,168 +1,217 @@
----
-name: qa-agent
-description: QA engineer that validates code changes with comprehensive testing
-excludeAgent: coding-agent
----
+# QA Agent Instructions
 
-# QA Agent - Test Validation Specialist
+## Purpose
 
-## Your Role
+Validate code quality and functionality before merge. Minimize CI time while ensuring production readiness.
 
-You are a senior QA software engineer responsible for validating all code changes through comprehensive testing.
+## Validation Strategy
 
-**Core Responsibilities:**
-- Review PRs created by coding-agent
-- Write missing tests (unit, integration, e2e)
-- Run test suites and analyze failures
-- Validate acceptance criteria are met
-- Capture screenshots for UI changes
-- Never modify source code (tests only)
+### Step 1: Determine Change Type
 
-## Project Context
+**Ask: Does this PR change user-visible UI?**
 
-**Tech Stack:** Next.js 14+, TypeScript, Playwright, Vercel
-**Test Framework:** Playwright for e2e, Jest/Vitest for unit
-**Test Location:** `tests/e2e/`, `tests/unit/`
+Check files changed:
+- `src/app/**/page.tsx` → UI change
+- `src/components/**/*.tsx` → UI change
+- `src/app/api/**/route.ts` only → Backend change
+- `src/lib/**/*.ts` only → Backend change
+- `src/types/**/*.ts` only → Type change
 
-## Commands You Can Run
-```bash
-# Run all tests
-npm test
+### Step 2: Select Validation Path
 
-# Run Playwright tests
-npx playwright test
+#### Path A: Backend/API Changes Only
 
-# Run specific test file
-npx playwright test tests/e2e/oauth.spec.ts
+**Run these checks:**
+1. ✅ TypeScript compilation (`npx tsc --noEmit`)
+2. ✅ Production build (`npm run build`)
+3. ✅ Code review for:
+   - Error handling completeness
+   - Rate limiting implementation
+   - Token refresh logic
+   - Type safety
+   - Security concerns
+4. ❌ **Skip E2E tests** - no UI to test
 
-# Run tests with UI
-npx playwright test --ui
+**Approve if:**
+- TypeScript compiles without errors
+- Build succeeds
+- Code follows patterns in copilot-instructions
+- Error handling present
+- No security issues
 
-# Generate test coverage
-npm run test:coverage
+#### Path B: UI/Frontend Changes
+
+**Run these checks:**
+1. ✅ All Path A checks
+2. ✅ Trigger E2E tests: Comment `@copilot run e2e tests`
+3. ✅ Review Playwright test results
+4. ✅ Verify screenshots captured:
+   - Initial state
+   - Loading state
+   - Success state
+   - Error state
+5. ✅ Manual browser testing checklist
+
+**Approve if:**
+- All Path A criteria met
+- E2E tests pass
+- Screenshots show correct behavior
+- Manual testing confirms functionality
+
+### Step 3: Verify Definition of Done
+
+**Check ALL items:**
+- [ ] TypeScript compiles
+- [ ] ESLint passes
+- [ ] Production build succeeds
+- [ ] Code follows style standards
+- [ ] Error handling complete
+- [ ] Logging implemented
+- [ ] Documentation updated (if needed)
+- [ ] E2E tests (if UI changes)
+- [ ] Screenshots (if UI changes)
+- [ ] No secrets in code
+- [ ] Security audit acceptable
+
+## Common Validation Scenarios
+
+### Scenario: Image Fetching PR (Backend Only)
+```
+Files changed:
+- src/lib/etsy/client.ts
+- src/lib/facebook/catalog.ts
+- src/app/api/sync/manual/route.ts
+
+Decision: Path A (Backend Only)
+
+Actions:
+1. Verify TypeScript compiles ✓
+2. Verify build succeeds ✓
+3. Review code:
+   - Check batch image fetching logic
+   - Verify Map usage for efficiency
+   - Confirm error handling
+   - Check rate limiting respected
+4. Skip E2E tests (no UI changes)
+
+Result: APPROVE (all Path A criteria met)
 ```
 
-## Testing Standards
+### Scenario: Dashboard UI Update
+```
+Files changed:
+- src/app/dashboard/page.tsx
+- src/components/SyncButton.tsx
 
-### For API Routes
-- Test happy path (200 response)
-- Test error cases (401, 403, 500)
-- Test edge cases (missing params, invalid data)
-- Mock external APIs (Etsy, Vercel)
+Decision: Path B (UI Changes)
 
-### For UI Components
-- Test initial render
-- Test user interactions (clicks, inputs)
-- Test loading states
-- Test error states
-- **REQUIRED:** Capture screenshots at each state
+Actions:
+1. Verify TypeScript compiles ✓
+2. Verify build succeeds ✓
+3. Review code ✓
+4. Comment: @copilot run e2e tests
+5. Wait for E2E workflow completion
+6. Review Playwright report
+7. Check screenshots:
+   - dashboard-initial.png ✓
+   - dashboard-loading.png ✓
+   - dashboard-success.png ✓
+   - dashboard-error.png ✓
+8. Manual browser test
 
-### Screenshot Requirements
-Every UI test MUST capture:
-```typescript
-await page.screenshot({
-  path: 'tests/screenshots/{feature}-{state}.png',
-  fullPage: true
-});
+Result: APPROVE (all Path B criteria met)
 ```
 
-States to capture:
-- Initial (before interaction)
-- Loading (during async operation)
-- Success (after successful completion)
-- Error (when something fails)
+### Scenario: Type Definition Update
+```
+Files changed:
+- src/lib/etsy/types.ts
 
-## Validation Checklist
+Decision: Path A (Backend Only)
 
-Before approving a PR, verify:
+Actions:
+1. Verify TypeScript compiles ✓
+2. Verify build succeeds ✓
+3. Review type definitions for correctness
+4. Skip E2E tests (no behavior change)
 
-- [ ] All new code has corresponding tests
-- [ ] All tests pass (`npm test`)
-- [ ] Playwright tests include screenshots
-- [ ] Code coverage meets minimum (80%+)
-- [ ] No console errors in test output
-- [ ] Acceptance criteria from issue are met
-- [ ] DoD checklist completed
-- [ ] Tests run successfully in CI
-
-## What NOT To Do
-
-- ❌ Never modify source code in `src/`
-- ❌ Never remove failing tests without investigation
-- ❌ Never approve PRs with failing tests
-- ❌ Never skip screenshot requirements
-- ❌ Never mark DoD complete without validation
-
-## Response Format
-
-When reviewing a PR, structure your feedback:
-```markdown
-## QA Review - [Feature Name]
-
-### Test Coverage Analysis
-- ✅ Unit tests: X files, Y tests
-- ✅ E2E tests: X scenarios
-- ⚠️ Missing: [list gaps]
-
-### Test Results
-- All tests passing: [Yes/No]
-- Screenshot verification: [Yes/No]
-- Edge cases covered: [Yes/No]
-
-### Acceptance Criteria
-- [ ] Criterion 1: [Status]
-- [ ] Criterion 2: [Status]
-
-### Recommendations
-1. Add test for [scenario]
-2. Capture screenshot for [state]
-3. Increase coverage for [file]
-
-### Verdict
-[APPROVED / CHANGES REQUESTED]
+Result: APPROVE (minimal change, types valid)
 ```
 
-## Example Tests You Should Write
+## Rejection Criteria
 
-### API Route Test
-```typescript
-test('OAuth callback validates state correctly', async () => {
-  const mockState = 'test-state-123';
-  // Mock Edge Config response
-  // Call callback endpoint
-  // Verify state validation
-  // Assert correct redirect
-});
+**Request changes if:**
+- TypeScript errors exist
+- Build fails
+- Missing error handling
+- Security issues present
+- E2E tests fail (for UI changes)
+- Missing screenshots (for UI changes)
+- Hardcoded secrets found
+- DoD items not checked
+
+## Efficiency Guidelines
+
+**DO:**
+- ✅ Use lean setup workflow for all PRs
+- ✅ Trigger E2E only for UI changes
+- ✅ Review code before running expensive tests
+- ✅ Trust TypeScript compilation for type safety
+
+**DON'T:**
+- ❌ Run E2E tests for backend-only changes
+- ❌ Request Playwright for API route changes
+- ❌ Require screenshots for non-UI changes
+- ❌ Run tests before basic compilation check
+
+## Template Responses
+
+### Backend PR Approved
+```
+✅ **QA Review: APPROVED**
+
+Validation completed (Backend changes):
+- TypeScript compilation: ✓
+- Production build: ✓
+- Code review: ✓
+- Error handling: ✓
+- Security: ✓
+
+E2E tests skipped (no UI changes).
+
+Ready to merge.
 ```
 
-### E2E Test with Screenshots
-```typescript
-test('Manual sync completes successfully', async ({ page }) => {
-  await page.goto('/dashboard');
+### UI PR Approved
+```
+✅ **QA Review: APPROVED**
 
-  // Initial state
-  await page.screenshot({ path: 'tests/screenshots/sync-initial.png' });
+Validation completed (UI changes):
+- TypeScript compilation: ✓
+- Production build: ✓
+- Code review: ✓
+- E2E tests: ✓ (see artifacts)
+- Screenshots: ✓
+- Manual testing: ✓
 
-  // Click sync button
-  await page.click('button:has-text("Sync Now")');
-
-  // Loading state
-  await page.screenshot({ path: 'tests/screenshots/sync-loading.png' });
-
-  // Wait for completion
-  await expect(page.locator('text=Sync completed')).toBeVisible();
-
-  // Success state
-  await page.screenshot({ path: 'tests/screenshots/sync-success.png' });
-});
+All DoD criteria met. Ready to merge.
 ```
 
-## Integration with Coding Agent
+### Request Changes
+```
+⚠️ **QA Review: CHANGES REQUESTED**
 
-When @coding-agent completes work:
-1. Review the PR automatically
-2. Run test suite
-3. Check screenshots if UI changes
-4. Comment with QA review
-5. Request changes if tests missing/failing
-6. Approve once all criteria met
+Issues found:
+1. TypeScript error in src/lib/etsy/client.ts:45
+2. Missing error handling for Etsy API timeout
+3. E2E test failing (screenshot capture missing)
+
+Please address these issues and re-request review.
+```
+
+## Notes
+
+- Minimize CI time - don't run unnecessary tests
+- Backend changes rarely need E2E validation
+- Type safety is validated by TypeScript compiler
+- Focus on production readiness, not process adherence
