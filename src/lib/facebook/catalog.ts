@@ -13,6 +13,8 @@ const MAX_TITLE_LENGTH = 150;
 /** Maximum length for Facebook product description */
 const MAX_DESCRIPTION_LENGTH = 5000;
 
+const MAX_IMAGES_FOR_ADDITIONAL = 11;
+
 /** Placeholder image URL when listing has no images */
 const PLACEHOLDER_IMAGE_URL = 'https://via.placeholder.com/800x800?text=No+Image';
 
@@ -142,9 +144,9 @@ export function getAdditionalImageUrls(listing: EtsyListing): string {
     return '';
   }
 
-  // Sort images by rank and take images 2-9 (up to 8 additional)
+  // Sort images by rank and take images 2 through limit of max additional images
   const sortedImages = [...listing.images].sort((a, b) => a.rank - b.rank);
-  const additionalImages = sortedImages.slice(1, 9);
+  const additionalImages = sortedImages.slice(1, MAX_IMAGES_FOR_ADDITIONAL);
 
   // Filter for valid URLs and join with commas
   const urls = additionalImages
