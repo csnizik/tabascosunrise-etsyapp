@@ -78,16 +78,25 @@ export async function POST(): Promise<NextResponse> {
     const listings = await client.getShopListings(shop.shop_id.toString());
     logInfo('Listings fetched', { count: listings.length });
 
-    // Step 4: Transform listings to Facebook CSV format
-    logInfo('Step 4: Transforming listings to CSV');
-    const csvContent = formatListingsToCSV(listings, shop.shop_name);
+    // Step 4: Fetch images for all listings
+    logInfo('Step 4: Fetching images for listings');
+    const listingIds = listings.map((l) => l.listing_id);
+    const listingImages = await client.getListingsWithImages(listingIds);
+    logInfo('Images fetched', {
+      listingsWithImages: listingImages.size,
+      totalListings: listings.length,
+    });
+
+    // Step 5: Transform listings to Facebook CSV format
+    logInfo('Step 5: Transforming listings to CSV');
+    const csvContent = formatListingsToCSV(listings, shop.shop_name, listingImages);
     logInfo('CSV generated', {
       contentLength: csvContent.length,
       listingsCount: listings.length,
     });
 
-    // Step 5: Upload CSV to Blob storage
-    logInfo('Step 5: Uploading CSV to Blob storage');
+    // Step 6: Upload CSV to Blob storage
+    logInfo('Step 6: Uploading CSV to Blob storage');
     const feedUrl = await uploadCSV(csvContent);
     logInfo('CSV uploaded', { feedUrl });
 
@@ -95,8 +104,8 @@ export async function POST(): Promise<NextResponse> {
     const duration = Date.now() - startTime;
     const timestamp = new Date().toISOString();
 
-    // Step 6: Store sync metadata in Edge Config
-    logInfo('Step 6: Storing sync metadata');
+    // Step 7: Store sync metadata in Edge Config
+    logInfo('Step 7: Storing sync metadata');
     await storeSyncMetadata({
       timestamp,
       status: 'success',
@@ -105,7 +114,7 @@ export async function POST(): Promise<NextResponse> {
     });
     logInfo('Sync metadata stored');
 
-    // Step 7: Return success response
+    // Step 8: Return success response
     const response: ManualSyncResponse = {
       success: true,
       feedUrl,

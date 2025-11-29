@@ -16,6 +16,7 @@ import type {
   EtsyTokens,
   EtsyListing,
   EtsyShop,
+  EtsyImage,
   EtsyListingsResponse,
   EtsyShopsResponse,
   RateLimitState,
@@ -543,6 +544,85 @@ export class EtsyClient {
     });
 
     return response;
+  }
+
+  /**
+   * Fetch images for multiple listings using batched API calls
+   * Uses getListingsByListingIds endpoint with includes=Images parameter
+   *
+   * @param listingIds - Array of listing IDs to fetch images for
+   * @returns Map of listing_id -> sorted EtsyImage[] (sorted by rank)
+   *
+   * @example
+   * const client = new EtsyClient();
+   * const imageMap = await client.getListingsWithImages([123, 456, 789]);
+   * const images = imageMap.get(123); // Array of images for listing 123
+   */
+  async getListingsWithImages(listingIds: number[]): Promise<Map<number, EtsyImage[]>> {
+    const imagesByListingId = new Map<number, EtsyImage[]>();
+
+    // Return empty map if no listing IDs provided
+    if (!listingIds || listingIds.length === 0) {
+      logInfo('No listing IDs provided for image fetching');
+      return imagesByListingId;
+    }
+
+    logInfo('Fetching images for listings', {
+      totalListings: listingIds.length,
+      batches: Math.ceil(listingIds.length / 100),
+    });
+
+    // Batch into groups of 100 (Etsy API limit)
+    for (let i = 0; i < listingIds.length; i += 100) {
+      const batch = listingIds.slice(i, i + 100);
+      const listingIdsParam = batch.join(',');
+
+      logInfo('Fetching image batch', {
+        batchNumber: Math.floor(i / 100) + 1,
+        batchSize: batch.length,
+      });
+
+      const endpoint = `/application/listings/batch?listing_ids=${listingIdsParam}&includes=Images`;
+
+      try {
+        const response = await this.makeRequest<{
+          count: number;
+          results: Array<{
+            listing_id: number;
+            images?: EtsyImage[];
+          }>;
+        }>(endpoint);
+
+        logInfo('Image batch received', {
+          listingsWithImages: response.results.filter((l) => l.images?.length).length,
+          totalListings: response.results.length,
+        });
+
+        // Build Map for efficient lookup
+        response.results.forEach((listing) => {
+          if (listing.images && listing.images.length > 0) {
+            // Sort by rank and limit to first 9 images
+            const sortedImages = listing.images
+              .sort((a, b) => a.rank - b.rank)
+              .slice(0, 9);
+            imagesByListingId.set(listing.listing_id, sortedImages);
+          }
+        });
+      } catch (error) {
+        logError('Failed to fetch image batch', {
+          batchNumber: Math.floor(i / 100) + 1,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+        throw error;
+      }
+    }
+
+    logInfo('Image fetching complete', {
+      totalListings: listingIds.length,
+      listingsWithImages: imagesByListingId.size,
+    });
+
+    return imagesByListingId;
   }
 
   /**

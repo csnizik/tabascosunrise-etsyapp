@@ -3,7 +3,7 @@
  * Transforms Etsy listings into Facebook Product Catalog CSV format
  */
 
-import type { EtsyListing, EtsyPrice } from '@/lib/etsy/types';
+import type { EtsyListing, EtsyPrice, EtsyImage } from '@/lib/etsy/types';
 import type { FacebookProduct, FacebookAvailability, FacebookCondition } from './types';
 import { logWarn } from '@/lib/utils/logger';
 
@@ -26,6 +26,7 @@ const CSV_HEADERS = [
   'price',
   'link',
   'image_link',
+  'additional_image_link',
   'brand',
 ] as const;
 
@@ -113,16 +114,73 @@ export function escapeCSV(value: string): string {
 
 /**
  * Gets the primary image URL from an Etsy listing
- * Returns placeholder if no images available or if URL is missing
+ * Tries multiple sources in order of preference
  * @param listing - Etsy listing object
- * @returns Image URL string
+ * @param listingImages - Optional Map of listing images from batch fetch
+ * @returns Image URL string or placeholder if no image available
  */
-export function getPrimaryImageUrl(listing: EtsyListing): string {
-  if (listing.images && listing.images.length > 0 && listing.images[0].url_fullxfull) {
-    // Use the full resolution image URL
-    return listing.images[0].url_fullxfull;
+export function getPrimaryImageUrl(
+  listing: EtsyListing,
+  listingImages?: Map<number, EtsyImage[]>
+): string {
+  // Priority 1: Use images from batch fetch (most reliable in API v3)
+  if (listingImages) {
+    const images = listingImages.get(listing.listing_id);
+    if (images && images.length > 0) {
+      // Images are already sorted by rank, first is main image
+      return images[0].url_fullxfull;
+    }
   }
+
+  // Priority 2: Use images from listing object (may be empty in API v3)
+  if (listing.images && listing.images.length > 0 && listing.images[0].url_fullxfull) {
+    // Sort by rank to ensure we get the main image
+    const sortedImages = [...listing.images].sort((a, b) => a.rank - b.rank);
+    return sortedImages[0].url_fullxfull;
+  }
+
+  // Priority 3: Placeholder (should rarely happen now)
+  logWarn('No image found for listing', { listing_id: listing.listing_id });
   return PLACEHOLDER_IMAGE_URL;
+}
+
+/**
+ * Gets additional image URLs (ranks 2-9) for a listing
+ * Returns comma-separated URLs for Facebook's additional_image_link column
+ * @param listing - Etsy listing object
+ * @param listingImages - Optional Map of listing images from batch fetch
+ * @returns Comma-separated image URLs or empty string
+ */
+export function getAdditionalImageUrls(
+  listing: EtsyListing,
+  listingImages?: Map<number, EtsyImage[]>
+): string {
+  // Priority 1: Use images from batch fetch
+  if (listingImages) {
+    const images = listingImages.get(listing.listing_id);
+    if (images && images.length > 1) {
+      // Images already sorted and limited to 9, skip first (main image)
+      return images
+        .slice(1)
+        .map((img) => img.url_fullxfull)
+        .join(',');
+    }
+  }
+
+  // Priority 2: Use images from listing object
+  if (listing.images && listing.images.length > 1) {
+    const sortedImages = [...listing.images]
+      .sort((a, b) => a.rank - b.rank)
+      .slice(0, 9);
+
+    return sortedImages
+      .slice(1) // Skip rank 1 (main image)
+      .map((img) => img.url_fullxfull)
+      .join(',');
+  }
+
+  // No additional images
+  return '';
 }
 
 /**
@@ -158,9 +216,14 @@ export function getAvailability(listing: EtsyListing): FacebookAvailability {
  * Transforms a single Etsy listing to a Facebook product
  * @param listing - Etsy listing to transform
  * @param shopName - Shop brand name
+ * @param listingImages - Optional Map of listing images from batch fetch
  * @returns FacebookProduct object or null if listing is invalid
  */
-export function formatListing(listing: EtsyListing, shopName: string): FacebookProduct | null {
+export function formatListing(
+  listing: EtsyListing,
+  shopName: string,
+  listingImages?: Map<number, EtsyImage[]>
+): FacebookProduct | null {
   if (!isValidListing(listing)) {
     return null;
   }
@@ -179,7 +242,8 @@ export function formatListing(listing: EtsyListing, shopName: string): FacebookP
     condition,
     price: formatPrice(listing.price),
     link: listing.url,
-    image_link: getPrimaryImageUrl(listing),
+    image_link: getPrimaryImageUrl(listing, listingImages),
+    additional_image_link: getAdditionalImageUrls(listing, listingImages),
     brand: shopName,
   };
 }
@@ -214,15 +278,20 @@ export function generateCSV(products: FacebookProduct[]): string {
  * Main function: Transforms an array of Etsy listings into Facebook catalog CSV format
  * @param listings - Array of Etsy listings
  * @param shopName - Shop brand name for the brand column
+ * @param listingImages - Optional Map of listing_id -> EtsyImage[] from batch fetch
  * @returns CSV string ready for Facebook catalog import
  * @throws Error if listings is not an array
  * @example
- * const csv = formatListingsToCSV(etsyListings, 'TabascoSunrise');
+ * const csv = formatListingsToCSV(etsyListings, 'TabascoSunrise', imageMap);
  * // Returns:
- * // id,title,description,availability,condition,price,link,image_link,brand
- * // 123456,Pattern Title,Description text,in stock,new,12.99 USD,https://...,https://...,TabascoSunrise
+ * // id,title,description,availability,condition,price,link,image_link,additional_image_link,brand
+ * // 123456,Pattern Title,Description text,in stock,new,12.99 USD,https://...,https://...,https://...,TabascoSunrise
  */
-export function formatListingsToCSV(listings: EtsyListing[], shopName: string): string {
+export function formatListingsToCSV(
+  listings: EtsyListing[],
+  shopName: string,
+  listingImages?: Map<number, EtsyImage[]>
+): string {
   if (!Array.isArray(listings)) {
     throw new Error('Invalid input: listings must be an array');
   }
@@ -234,7 +303,7 @@ export function formatListingsToCSV(listings: EtsyListing[], shopName: string): 
   // Transform listings to Facebook products, filtering out invalid ones
   const products: FacebookProduct[] = [];
   for (const listing of listings) {
-    const product = formatListing(listing, shopName);
+    const product = formatListing(listing, shopName, listingImages);
     if (product) {
       products.push(product);
     } else {

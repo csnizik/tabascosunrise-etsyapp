@@ -159,15 +159,24 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const listings = await client.getShopListings(shop.shop_id.toString());
     logInfo('Cron sync: Listings fetched', { count: listings.length });
 
-    // Step 4: Transform listings to Facebook CSV format
+    // Step 4: Fetch images for all listings
+    logInfo('Cron sync: Fetching images for listings');
+    const listingIds = listings.map((l) => l.listing_id);
+    const listingImages = await client.getListingsWithImages(listingIds);
+    logInfo('Cron sync: Images fetched', {
+      listingsWithImages: listingImages.size,
+      totalListings: listings.length,
+    });
+
+    // Step 5: Transform listings to Facebook CSV format
     logInfo('Cron sync: Transforming listings to CSV');
-    const csvContent = formatListingsToCSV(listings, shop.shop_name);
+    const csvContent = formatListingsToCSV(listings, shop.shop_name, listingImages);
     logInfo('Cron sync: CSV generated', {
       contentLength: csvContent.length,
       listingsCount: listings.length,
     });
 
-    // Step 5: Upload CSV to Blob storage
+    // Step 6: Upload CSV to Blob storage
     logInfo('Cron sync: Uploading CSV to Blob storage');
     const feedUrl = await uploadCSV(csvContent);
     logInfo('Cron sync: CSV uploaded', { feedUrl });
@@ -176,7 +185,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const duration = Date.now() - startTime;
     const timestamp = new Date().toISOString();
 
-    // Step 6: Store sync metadata in Edge Config
+    // Step 7: Store sync metadata in Edge Config
     logInfo('Cron sync: Storing sync metadata');
     await storeSyncMetadata({
       timestamp,
@@ -186,7 +195,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
     logInfo('Cron sync: Sync metadata stored');
 
-    // Step 7: Return success response
+    // Step 8: Return success response
     const response: CronSyncResponse = {
       success: true,
       feedUrl,

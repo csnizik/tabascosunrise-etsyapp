@@ -24,6 +24,7 @@ export type FacebookCondition = 'new' | 'refurbished' | 'used';
  * @property price - Formatted price with currency (e.g., "12.99 USD")
  * @property link - URL to product page
  * @property image_link - URL to main product image
+ * @property additional_image_link - Comma-separated URLs to additional images
  * @property brand - Brand name
  */
 export interface FacebookProduct {
@@ -35,5 +36,6 @@ export interface FacebookProduct {
   price: string;
   link: string;
   image_link: string;
+  additional_image_link: string;
   brand: string;
 }
