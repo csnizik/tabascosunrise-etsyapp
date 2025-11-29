@@ -45,10 +45,10 @@ async function getOAuthStateWithRetry(
 }
 
 /**
- * Maximum age for OAuth state (10 minutes)
+ * Maximum age for OAuth state (15 minutes)
  * States older than this are considered expired
  */
-const OAUTH_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+const OAUTH_STATE_MAX_AGE_MS = 15 * 60 * 1000;
 
 /**
  * Token response from Etsy OAuth endpoint
