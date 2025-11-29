@@ -1,8 +1,5 @@
 name: "Copilot Setup Steps"
 
-# Lean validation workflow - only essentials
-# E2E tests run in separate on-demand workflow
-
 on:
   workflow_dispatch:
   pull_request:
@@ -15,9 +12,6 @@ jobs:
     timeout-minutes: 8
 
     steps:
-      # ================================================================
-      # Repository & Environment
-      # ================================================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -27,9 +21,6 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      # ================================================================
-      # Dependencies
-      # ================================================================
       - name: Install dependencies
         run: npm ci
         env:
@@ -40,9 +31,6 @@ jobs:
           echo "Next.js: $(npx next --version)"
           echo "TypeScript: $(npx tsc --version)"
 
-      # ================================================================
-      # Code Quality Checks
-      # ================================================================
       - name: TypeScript compilation
         run: npx tsc --noEmit --pretty
 
@@ -64,30 +52,23 @@ jobs:
           fi
           echo "Build size: $(du -sh .next)"
 
-      # ================================================================
-      # Security
-      # ================================================================
       - name: Check for secrets
         run: |
-          # Check for API keys
-          if grep -rE "ETSY_API_KEY.*=.*[a-z0-9]{20,}" src/ 2>/dev/null; then
+          if grep -rE 'ETSY_API_KEY.*=.*[a-z0-9]{20,}' src/ 2>/dev/null; then
             echo "ERROR: API key in source code"
             exit 1
           fi
 
-          # Check for tokens
-          if grep -rE "Bearer [a-zA-Z0-9_-]{20,}" src/ 2>/dev/null; then
+          if grep -rE 'Bearer [a-zA-Z0-9_-]{20,}' src/ 2>/dev/null; then
             echo "ERROR: Bearer token in source code"
             exit 1
           fi
 
       - name: Security audit
-        run: npm audit --audit-level=high || echo "WARNING: Vulnerabilities found"
+        run: |
+          npm audit --audit-level=high || echo "WARNING: Vulnerabilities found"
         continue-on-error: true
 
-      # ================================================================
-      # Summary
-      # ================================================================
       - name: Summary
         if: always()
         run: |
