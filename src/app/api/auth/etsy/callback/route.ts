@@ -16,6 +16,8 @@ import { getOAuthState, deleteOAuthState, storeEtsyTokens } from '@/lib/storage/
 import { logInfo, logError } from '@/lib/utils/logger';
 import { OAuthError, ConfigError, toPublicError } from '@/lib/utils/errors';
 import type { EtsyTokens } from '@/lib/etsy/types';
+import type { OAuthStateData } from '@/lib/etsy/oauth'
+
 
 /**
  * Retry reading OAuth state with exponential backoff
