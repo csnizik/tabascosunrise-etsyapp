@@ -207,8 +207,8 @@ Save to: `tests/screenshots/{feature}-{state}.png`
 ## Environment Variables
 ```env
 # Etsy (from Developer Portal)
-ETSY_API_KEY=x9asgw4xr1qujte68pus54al
-ETSY_SHARED_SECRET=j56ebg2tbr
+ETSY_API_KEY=
+ETSY_SHARED_SECRET=
 ETSY_REDIRECT_URI=http://localhost:3000/api/auth/etsy/callback
 ETSY_SCOPES=listings_r shops_r
 
