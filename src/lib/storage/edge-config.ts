@@ -82,7 +82,7 @@ function delay(ms: number): Promise<void> {
 
 /**
  * Retrieve OAuth state data for the authorization callback
- * Includes retry logic to handle Edge Config propagation delays
+ * Includes retry logic to handle Edge Config propagation delays on errors
  *
  * @param state - The state parameter to look up
  * @returns OAuth state data or null if not found
@@ -90,24 +90,15 @@ function delay(ms: number): Promise<void> {
 export async function getOAuthState(state: string): Promise<OAuthStateData | null> {
   const key = `oauth_state_${state}`;
 
-  // Retry logic to handle Edge Config propagation delays
+  // Retry logic to handle Edge Config propagation delays on read errors
   for (let attempt = 0; attempt < EDGE_CONFIG_READ_MAX_RETRIES; attempt++) {
     try {
       const client = getEdgeConfigClient();
       const data = await client.get<OAuthStateData>(key);
       
-      if (data) {
-        return data;
-      }
-      
-      // If not found and we have retries left, wait and try again
-      if (attempt < EDGE_CONFIG_READ_MAX_RETRIES - 1) {
-        logInfo('OAuth state not found, retrying after delay', {
-          attempt: attempt + 1,
-          maxRetries: EDGE_CONFIG_READ_MAX_RETRIES,
-        });
-        await delay(EDGE_CONFIG_READ_RETRY_DELAY_MS);
-      }
+      // Return immediately if data exists or doesn't exist (no retry for null)
+      // Only retry on actual errors, not when state legitimately doesn't exist
+      return data ?? null;
     } catch (error) {
       // On read error, log and retry if possible
       if (attempt < EDGE_CONFIG_READ_MAX_RETRIES - 1) {
