@@ -138,7 +138,7 @@ export function getPrimaryImageUrl(listing: EtsyListing): string {
  * @returns Comma-separated image URLs string, empty string if no additional images
  */
 export function getAdditionalImageUrls(listing: EtsyListing): string {
-  if (!listing.images || listing.images.length <= 1) {
+  if (!listing.images || listing.images.length < 2) {
     return '';
   }
 
@@ -149,7 +149,7 @@ export function getAdditionalImageUrls(listing: EtsyListing): string {
   // Filter for valid URLs and join with commas
   const urls = additionalImages
     .map((img) => img.url_fullxfull)
-    .filter((url) => url && url.trim() !== '');
+    .filter((url): url is string => !!url?.trim());
 
   return urls.join(',');
 }
