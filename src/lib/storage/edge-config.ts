@@ -62,7 +62,27 @@ export async function storeOAuthState(state: string, data: OAuthStateData): Prom
 }
 
 /**
+ * Maximum number of retries for Edge Config reads
+ * Used to handle Edge Config propagation delays
+ */
+const EDGE_CONFIG_READ_MAX_RETRIES = 3;
+
+/**
+ * Delay in milliseconds between Edge Config read retries
+ * Allows time for Edge Config propagation
+ */
+const EDGE_CONFIG_READ_RETRY_DELAY_MS = 1000;
+
+/**
+ * Helper function to delay execution
+ */
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
  * Retrieve OAuth state data for the authorization callback
+ * Includes retry logic to handle Edge Config propagation delays on errors
  *
  * @param state - The state parameter to look up
  * @returns OAuth state data or null if not found
@@ -70,20 +90,37 @@ export async function storeOAuthState(state: string, data: OAuthStateData): Prom
 export async function getOAuthState(state: string): Promise<OAuthStateData | null> {
   const key = `oauth_state_${state}`;
 
-  try {
-    const client = getEdgeConfigClient();
-    const data = await client.get<OAuthStateData>(key);
-    return data ?? null;
-  } catch (error) {
-    logError('Failed to retrieve OAuth state', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
-    throw new StorageError(
-      'Failed to retrieve OAuth state from Edge Config',
-      'EDGE_CONFIG_READ_ERROR',
-      error instanceof Error ? error : undefined
-    );
+  // Retry logic to handle Edge Config propagation delays on read errors
+  for (let attempt = 0; attempt < EDGE_CONFIG_READ_MAX_RETRIES; attempt++) {
+    try {
+      const client = getEdgeConfigClient();
+      const data = await client.get<OAuthStateData>(key);
+      
+      // Return immediately if data exists or doesn't exist (no retry for null)
+      // Only retry on actual errors, not when state legitimately doesn't exist
+      return data ?? null;
+    } catch (error) {
+      // On read error, log and retry if possible
+      if (attempt < EDGE_CONFIG_READ_MAX_RETRIES - 1) {
+        logError('Failed to retrieve OAuth state, retrying', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          attempt: attempt + 1,
+        });
+        await delay(EDGE_CONFIG_READ_RETRY_DELAY_MS);
+      } else {
+        logError('Failed to retrieve OAuth state after all retries', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+        throw new StorageError(
+          'Failed to retrieve OAuth state from Edge Config',
+          'EDGE_CONFIG_READ_ERROR',
+          error instanceof Error ? error : undefined
+        );
+      }
+    }
   }
+  
+  return null;
 }
 
 /**
